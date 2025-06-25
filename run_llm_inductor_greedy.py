@@ -135,14 +135,14 @@ if args.profile:
             torch.profiler.ProfilerActivity.XPU,
         ],
         schedule=torch.profiler.schedule(
-            wait=10,
-            warmup=10,
-            active=10),
+            wait=0,
+            warmup=2,
+            active=5),
         on_trace_ready=trace_handler,
         record_shapes=True
         ) as prof:
             with torch.no_grad(), torch.autocast(enabled=amp_enabled, device_type=args.device, dtype=load_dtype):
-                for i in range(30):
+                for i in range(7):
                     # input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(args.device)
                     
                     # from torchinfo import summary
