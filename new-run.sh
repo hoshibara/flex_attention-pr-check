@@ -18,7 +18,7 @@ TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 SCRIPT_DIR="$(dirname "$0")"
 
 # Define the full path to the results directory
-RESULTS_DIR="$TIMESTAMP-triton_pin-1133-disable_tf32"
+RESULTS_DIR="$TIMESTAMP-weekly"
 
 # Define paths to the helper scripts (assuming they are in the same directory as this script)
 COLLECT_SCRIPT="$SCRIPT_DIR/collect_tests.py"
@@ -59,6 +59,8 @@ else
     # Redirect output to the results directory
     set +e
     python "$COLLECT_ENV_SCRIPT" > "$RESULTS_DIR/collect_env.log" 2>&1
+    echo -e "\n\n$ pip list | grep transformers\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
+    pip list | grep transformers >> "$RESULTS_DIR/collect_env.log" 2>&1
     echo -e "\n\n$ dpkg -l | grep igc\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
     dpkg -l | grep igc >> "$RESULTS_DIR/collect_env.log" 2>&1
     echo -e "\n\n$ dpkg -l | grep dkms\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
