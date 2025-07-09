@@ -11,6 +11,7 @@ def parse_log_file(log_content):
     total_time_pattern = re.compile(r'\(Took ([\d.]+) seconds\)')
 
     parsed_data = {}
+    skipped_count = 0
 
     # 使用 split 比 finditer 更简单，因为每个UT块都由'--- Running:'明确分隔
     test_blocks = log_content.split('--- Running:')[1:] # 第一个元素是文件头，忽略
@@ -18,6 +19,10 @@ def parse_log_file(log_content):
     for i, block in enumerate(test_blocks):
         # 补全block，以便能匹配 --- Finished ---
         full_block_for_match = f"--- Running: {block}"
+        
+        if "OK\n" not in full_block_for_match:
+            skipped_count += 1
+            continue  # 跳过这个不成功的UT块
 
         # 1. 提取UT名字
         ut_name_match = ut_name_pattern.search(full_block_for_match)
@@ -48,7 +53,7 @@ def parse_log_file(log_content):
             'exit_code': exit_status
         }
 
-    return parsed_data
+    return parsed_data, skipped_count
 
 def main():
     """
@@ -57,7 +62,7 @@ def main():
     # --- 请在这里配置你的文件路径 ---
     cuda_log_file = '/workspace1/xingyuan/20250213-flexatt-enable/1133-ut-test/cuda-full-scale/20250708-222531-weekly/test_flex_attention.result.log'
     xpu_log_file = '/workspace1/xingyuan/20250213-flexatt-enable/1133-ut-test/20250704-080218-weekly/test_flex_attention.result.log'
-    output_csv_file = '/workspace1/xingyuan/20250213-flexatt-enable/1133-ut-test/20250704-080218-weekly/flex_attn.csv'
+    output_csv_file = '/workspace1/xingyuan/20250213-flexatt-enable/1133-ut-test/20250704-080218-weekly/flex_attention.csv'
     # ------------------------------------
 
     # 检查输入文件是否存在
@@ -75,12 +80,12 @@ def main():
         xpu_content = f.read()
 
     print("Parsing CUDA log...")
-    cuda_results = parse_log_file(cuda_content)
-    print(f"Found {len(cuda_results)} UTs in CUDA log.")
+    cuda_results, cuda_skipped = parse_log_file(cuda_content)
+    print(f"Found {len(cuda_results)} successful UTs in CUDA log (skipped {cuda_skipped} non-OK tests).")
 
     print("Parsing XPU log...")
-    xpu_results = parse_log_file(xpu_content)
-    print(f"Found {len(xpu_results)} UTs in XPU log.")
+    xpu_results, xpu_skipped = parse_log_file(xpu_content)
+    print(f"Found {len(xpu_results)} successful UTs in XPU log (skipped {xpu_skipped} non-OK tests).")
 
     # 合并所有唯一的UT（基于标准化名称）
     all_normalized_keys = sorted(list(set(cuda_results.keys()) | set(xpu_results.keys())))
