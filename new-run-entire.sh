@@ -18,7 +18,7 @@ TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 SCRIPT_DIR="$(dirname "$0")"
 
 # Define the full path to the results directory
-RESULTS_DIR="$TIMESTAMP-triton_pin-1133-entire"
+RESULTS_DIR="$TIMESTAMP-weekly"
 
 # Define paths to the helper scripts (assuming they are in the same directory as this script)
 COLLECT_SCRIPT="$SCRIPT_DIR/collect_tests.py"
@@ -52,25 +52,27 @@ echo "Collecting environment information..."
 # Assuming collect_env.py is one directory level up from where this script is located
 COLLECT_ENV_SCRIPT="$SCRIPT_DIR/../collect_env.py"
 # Check if the environment collection script exists and is executable
-set +e
 if [ ! -s "$COLLECT_ENV_SCRIPT" ]; then
     echo "Warning: collect_env.py script not found or not executable at $COLLECT_ENV_SCRIPT. Skipping environment collection." >&2
     # Do not exit, just warn and continue script execution
 else
     # Redirect output to the results directory
+    set +e
     python "$COLLECT_ENV_SCRIPT" > "$RESULTS_DIR/collect_env.log" 2>&1
+    echo -e "\n\n$ pip list | grep transformers\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
+    pip list | grep transformers >> "$RESULTS_DIR/collect_env.log" 2>&1
     echo -e "\n\n$ dpkg -l | grep igc\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
     dpkg -l | grep igc >> "$RESULTS_DIR/collect_env.log" 2>&1
     echo -e "\n\n$ dpkg -l | grep dkms\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
     dpkg -l | grep dkms >> "$RESULTS_DIR/collect_env.log" 2>&1
     echo "Done collecting environment info." >> "$RESULTS_DIR/collect_env.log" # Append Done message to the log file
     echo "Environment log saved to $RESULTS_DIR/collect_env.log"
+    set -e
 fi
-set -e
 
 
-TORCH_LOGS="+output_code" python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 100 \
-  --input-tokens 1024 --num-warmup 5 --num-iter 15 --compile --profile >> "$RESULTS_DIR/llama31.compile.xpu.profile.log" 2>&1
+TORCH_LOGS="+output_code" python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
+  --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile >> "$RESULTS_DIR/llama31.compile.xpu.profile.log" 2>&1
 
 # --- Test Execution Loop ---
 
