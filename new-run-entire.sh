@@ -97,7 +97,7 @@ for TEST_FILE in "${TEST_FILES[@]}"; do
     # The bash runner script exit status is checked by 'set -e'.
     set +e
     echo "--- Starting test execution at $(date) ---" >> "$TEST_LOG_FILE"
-    python "$TEST_FILE" >> "$TEST_LOG_FILE" 2>&1
+    pytest --durations=0 "$TEST_FILE" >> "$TEST_LOG_FILE" 2>&1
     echo "--- Test execution finished at $(date) ---" >> "$TEST_LOG_FILE"
     set -e
     # Note: Any 'tee' commands within run_tests_sequentially.sh will now have their
