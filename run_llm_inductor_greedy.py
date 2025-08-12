@@ -25,11 +25,16 @@ from transformers import (
 )
 
 import torch
+
+
 def trace_handler(prof):
-    print(prof.key_averages().table(
-        sort_by="self_xpu_time_total", row_limit=-1))
-    
-parser = argparse.ArgumentParser("LLM generation (greedy search) script for inductor torch.compile path", add_help=False)
+    print(prof.key_averages().table(sort_by="self_xpu_time_total", row_limit=-1))
+
+
+parser = argparse.ArgumentParser(
+    "LLM generation (greedy search) script for inductor torch.compile path",
+    add_help=False,
+)
 parser.add_argument(
     "-m",
     "--model-name-or-path",
@@ -56,6 +61,12 @@ parser.add_argument("--batch-size", default=1, type=int, help="batch size")
 parser.add_argument("--device", default="xpu", type=str)
 parser.add_argument("--profile", action="store_true")
 parser.add_argument("--compile", action="store_true")
+parser.add_argument(
+    "--attn_type",
+    default="flex_attention",
+    choices=["flex_attention", "paged_attention", "sdpa"],
+    type=str,
+)
 args = parser.parse_args()
 
 if args.dtype == "bf16":
@@ -71,12 +82,17 @@ else:
     assert False, "This script only support bf16 and fp32 as dtype"
 
 # attn_type = "paged_attention" #"flex_attention"#
-attn_type = "flex_attention"
+# attn_type = "flex_attention"
+# attn_type = "sdpa"
+attn_type = args.attn_type
+print("[INFO] attn_type = ", attn_type)
 tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
-model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path, torch_dtype=load_dtype, attn_implementation=attn_type).to(args.device)
+model = AutoModelForCausalLM.from_pretrained(
+    args.model_name_or_path, torch_dtype=load_dtype, attn_implementation=attn_type
+).to(args.device)
 if attn_type == "paged_attention":
     model.generation_config.cache_implementation = "paged"
-    model.config.page_size = args.page_size 
+    model.config.page_size = args.page_size
 
 
 # from torch._inductor import config as inductor_config
@@ -86,9 +102,11 @@ if attn_type == "paged_attention":
 # inductor_config.cpp_wrapper = True
 # inductor_config.max_autotune = True
 if args.compile:
-    with torch.no_grad(), torch.autocast(enabled=amp_enabled, device_type=args.device, dtype=load_dtype):
-        print('compile Enabled')
-        model.forward=torch.compile(model.forward, dynamic=True)
+    with torch.no_grad(), torch.autocast(
+        enabled=amp_enabled, device_type=args.device, dtype=load_dtype
+    ):
+        print("compile Enabled")
+        model.forward = torch.compile(model.forward, dynamic=True)
 
 # greedy search
 generate_kwargs = dict(
@@ -96,6 +114,7 @@ generate_kwargs = dict(
     temperature=0.9,
     num_beams=1,
     token_latency=True,
+    cache_implementation="static",
 )
 current_path = pathlib.Path(__file__).parent.resolve()
 if args.prompt is not None:
@@ -104,10 +123,11 @@ else:
     with open(str(current_path) + "/prompt.json") as f:
         prompt_pool = json.load(f)
     if "llama" in prompt_pool and args.input_tokens in prompt_pool["llama"]:
-        prompt = prompt_pool["llama"]['2048']
+        prompt = prompt_pool["llama"]["2048"]
     else:
-        raise SystemExit("[ERROR] No such input_tokens prompt in prompt.json, Plese use --prompt if want to use custom input.")
-
+        raise SystemExit(
+            "[ERROR] No such input_tokens prompt in prompt.json, Plese use --prompt if want to use custom input."
+        )
 
 
 prompt = [prompt] * args.batch_size
@@ -119,13 +139,16 @@ input_size = input_ids.size(dim=1)
 print("---- Prompt size:", input_size)
 
 # warmup
-with torch.no_grad(), torch.autocast(enabled=amp_enabled, device_type=args.device, dtype=load_dtype):
+with torch.no_grad(), torch.autocast(
+    enabled=amp_enabled, device_type=args.device, dtype=load_dtype
+):
     for i in range(args.num_warmup):
         # input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(args.device)
         model.generate(
-            input_ids, 
+            input_ids,
             attention_mask=attention_mask,
-            max_new_tokens=args.max_new_tokens, **generate_kwargs
+            max_new_tokens=args.max_new_tokens,
+            **generate_kwargs
         )
 
 if args.profile:
@@ -134,32 +157,34 @@ if args.profile:
             torch.profiler.ProfilerActivity.CPU,
             torch.profiler.ProfilerActivity.XPU,
         ],
-        schedule=torch.profiler.schedule(
-            wait=0,
-            warmup=2,
-            active=5),
+        schedule=torch.profiler.schedule(wait=0, warmup=2, active=5),
         on_trace_ready=trace_handler,
-        record_shapes=True
-        ) as prof:
-            with torch.no_grad(), torch.autocast(enabled=amp_enabled, device_type=args.device, dtype=load_dtype):
-                for i in range(7):
-                    # input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(args.device)
-                    
-                    # from torchinfo import summary
-                    # summary(model, input_data=input_ids, depth=10)
-                    
-                    model.generate(
-                        input_ids,
-                        attention_mask=attention_mask,
-                        max_new_tokens=args.max_new_tokens, **generate_kwargs
-                    )
-                    prof.step()
+        record_shapes=True,
+    ) as prof:
+        with torch.no_grad(), torch.autocast(
+            enabled=amp_enabled, device_type=args.device, dtype=load_dtype
+        ):
+            for i in range(7):
+                # input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(args.device)
+
+                # from torchinfo import summary
+                # summary(model, input_data=input_ids, depth=10)
+
+                model.generate(
+                    input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=args.max_new_tokens,
+                    **generate_kwargs
+                )
+                prof.step()
 # benchmark
 num_iter = args.num_iter - args.num_warmup
 total_time = 0.0
 total_list = []
 gen_text = None
-with torch.no_grad(), torch.autocast(enabled=amp_enabled, device_type=args.device, dtype=load_dtype):
+with torch.no_grad(), torch.autocast(
+    enabled=amp_enabled, device_type=args.device, dtype=load_dtype
+):
     for i in range(num_iter):
         torch.xpu.synchronize()
         tic = time.time()
@@ -167,7 +192,8 @@ with torch.no_grad(), torch.autocast(enabled=amp_enabled, device_type=args.devic
         output = model.generate(
             input_ids,
             attention_mask=attention_mask,
-            max_new_tokens=args.max_new_tokens, **generate_kwargs
+            max_new_tokens=args.max_new_tokens,
+            **generate_kwargs
         )
         gen_ids = output[0]
         gen_text = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
@@ -181,12 +207,12 @@ print("\n", "-" * 10, "Summary:", "-" * 10)
 latency = total_time / (num_iter)
 print("inference-latency: %.3f sec." % latency)
 first_latency = np.mean([x[0] for x in total_list])
-if args.max_new_tokens>1:
+if args.max_new_tokens > 1:
     next_latency_list = list(chain(*[x[1:] for x in total_list]))
     next_latency_list.sort()
     average_next_latency = np.mean(next_latency_list)
     p90_latency = np.percentile(next_latency_list, 90)
 print("first-token-latency: %.3f sec." % first_latency)
-if args.max_new_tokens>1:
+if args.max_new_tokens > 1:
     print("rest-token-latency: %.3f sec." % average_next_latency)
     print("P90-rest-token-latency: %.3f sec." % p90_latency)
