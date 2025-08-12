@@ -88,8 +88,8 @@ python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-toke
 ONEDNN_VERBOSE=all python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --attn_type=sdpa >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.verbose.log" 2>&1
 
-echo "Exit after llama3"
-exit
+# echo "Exit after llama3"
+# exit
 
 # --- Test Execution Loop ---
 
