@@ -31,6 +31,7 @@ TEST_FILES=(
 )
 
 TRITON_LESS_FLEX_ATTN_BWD_CONFIGS=1
+CI=1
 
 # Check if the specified test files exist before starting
 for TEST_FILE in "${TEST_FILES[@]}"; do
