@@ -15,7 +15,8 @@ start_time=$(date +%s)
 TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(dirname "$0")"
+# SCRIPT_DIR="$(dirname "$0")"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Define the full path to the results directory
 RESULTS_DIR="$TIMESTAMP-weekly"
@@ -26,12 +27,11 @@ RUNNER_SCRIPT="$SCRIPT_DIR/run_tests_sequentially.sh"
 
 # Define the specific test files you want to run
 TEST_FILES=(
-    "../hoshibara-pytorch/test/inductor/test_flex_attention.py"
-    "../hoshibara-pytorch/test/inductor/test_flex_decoding.py"
+    "../pytorch/test/inductor/test_flex_attention.py"
+    "../pytorch/test/inductor/test_flex_decoding.py"
 )
 
 export TRITON_LESS_FLEX_ATTN_BWD_CONFIGS=1
-export CI=1
 
 # Check if the specified test files exist before starting
 for TEST_FILE in "${TEST_FILES[@]}"; do
@@ -42,12 +42,13 @@ for TEST_FILE in "${TEST_FILES[@]}"; do
     fi
 done
 
-
 # --- Setup ---
 
 # Create the timestamped directory for results
 echo "Creating results directory: $RESULTS_DIR"
 mkdir -p "$RESULTS_DIR" # Use -p to avoid error if directory already exists (unlikely with timestamp, but safe)
+export TORCHINDUCTOR_CACHE_DIR="$SCRIPT_DIR/$RESULTS_DIR/torchinductor_cache"
+echo "TORCHINDUCTOR_CACHE_DIR = $TORCHINDUCTOR_CACHE_DIR"
 
 
 # Collect environment information
@@ -73,24 +74,27 @@ else
     set -e
 fi
 
+unset CI
 
 # TORCH_LOGS="+output_code" python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
 #   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=sdpa >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.profile.log" 2>&1
 
-TORCH_LOGS="+output_code" python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
-  --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=flex_attention >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.log" 2>&1
+# TORCH_LOGS="+output_code" python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
+#   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=flex_attention >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.log" 2>&1
 
-# python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
-#   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --attn_type=sdpa >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.log" 2>&1
+python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
+  --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --attn_type=flex_attention >> "$RESULTS_DIR/llama31.fa.compile.xpu.log" 2>&1
 
-# python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
-#   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --attn_type=flex_attention >> "$RESULTS_DIR/llama31.fa.compile.xpu.log" 2>&1
+python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
+  --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --attn_type=sdpa >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.log" 2>&1
 
 # ONEDNN_VERBOSE=all python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
 #   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --attn_type=sdpa >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.verbose.log" 2>&1
 
 # echo "Exit after llama3"
 # exit
+
+export CI=1
 
 # --- Test Execution Loop ---
 
