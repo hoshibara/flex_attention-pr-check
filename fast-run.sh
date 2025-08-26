@@ -30,8 +30,8 @@ TEST_FILES=(
     "../hoshibara-pytorch/test/inductor/test_flex_decoding.py"
 )
 
-TRITON_LESS_FLEX_ATTN_BWD_CONFIGS=1
-CI=1
+export TRITON_LESS_FLEX_ATTN_BWD_CONFIGS=1
+export CI=1
 
 # Check if the specified test files exist before starting
 for TEST_FILE in "${TEST_FILES[@]}"; do
@@ -77,7 +77,7 @@ fi
 # TORCH_LOGS="+output_code" python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
 #   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=sdpa >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.profile.log" 2>&1
 
-TORCH_LOGS="+output_code" python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
+TORCH_LOGS="+output_code" python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=flex_attention >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.log" 2>&1
 
 # python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \

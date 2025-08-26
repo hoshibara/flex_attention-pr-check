@@ -87,9 +87,12 @@ else:
 attn_type = args.attn_type
 print("[INFO] attn_type = ", attn_type)
 tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
+print("[INFO] tokenizer loaded")
 model = AutoModelForCausalLM.from_pretrained(
-    args.model_name_or_path, torch_dtype=load_dtype, attn_implementation=attn_type
-).to(args.device)
+    args.model_name_or_path, torch_dtype=load_dtype, attn_implementation=attn_type,
+)
+print("[INFO] Model loaded")
+model = model.to(args.device)
 if attn_type == "paged_attention":
     model.generation_config.cache_implementation = "paged"
     model.config.page_size = args.page_size
@@ -105,8 +108,9 @@ if args.compile:
     with torch.no_grad(), torch.autocast(
         enabled=amp_enabled, device_type=args.device, dtype=load_dtype
     ):
-        print("compile Enabled")
+        print("[INFO] Model start compiling")
         model.forward = torch.compile(model.forward, dynamic=True)
+        print("[INFO] Model compiled")
 
 # greedy search
 generate_kwargs = dict(
