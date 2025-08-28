@@ -82,7 +82,9 @@ else:
 def trace_handler(prof):
     print(
         prof.key_averages().table(
-            sort_by=f"self_{args.device}_time_total", row_limit=-1
+            sort_by=f"self_{args.device}_time_total",
+            row_limit=-1,
+            max_name_column_width=100,
         )
     )
 
