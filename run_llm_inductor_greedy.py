@@ -78,9 +78,15 @@ elif args.dtype == "fp16":
 else:
     assert False, "This script only support bf16 and fp32 as dtype"
 
+
 def trace_handler(prof):
-    print(prof.key_averages().table(sort_by=f"self_{args.device}_time_total", row_limit=-1))
-    
+    print(
+        prof.key_averages().table(
+            sort_by=f"self_{args.device}_time_total", row_limit=-1
+        )
+    )
+
+
 device_interface = getattr(torch, args.device)
 
 # attn_type = "paged_attention" #"flex_attention"#
@@ -91,7 +97,9 @@ print("[INFO] attn_type = ", attn_type)
 tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
 print("[INFO] tokenizer loaded")
 model = AutoModelForCausalLM.from_pretrained(
-    args.model_name_or_path, torch_dtype=load_dtype, attn_implementation=attn_type,
+    args.model_name_or_path,
+    torch_dtype=load_dtype,
+    attn_implementation=attn_type,
 )
 print("[INFO] Model loaded")
 model = model.to(args.device)
@@ -111,7 +119,10 @@ if args.compile:
         enabled=amp_enabled, device_type=args.device, dtype=load_dtype
     ):
         print("[INFO] Model start compiling")
-        model.forward = torch.compile(model.forward, dynamic=True)
+        model.forward = torch.compile(
+            model.forward,
+            dynamic=True,
+        )
         print("[INFO] Model compiled")
 
 # greedy search
@@ -154,17 +165,19 @@ with torch.no_grad(), torch.autocast(
             input_ids,
             attention_mask=attention_mask,
             max_new_tokens=args.max_new_tokens,
-            **generate_kwargs
+            **generate_kwargs,
         )
 
 if args.profile:
-    activities = [torch.profiler.ProfilerActivity.CPU,]
+    activities = [
+        torch.profiler.ProfilerActivity.CPU,
+    ]
     if "xpu" in args.device:
         activities.append(torch.profiler.ProfilerActivity.XPU)
     elif "cuda" in args.device:
         activities.append(torch.profiler.ProfilerActivity.CUDA)
     device_interface.synchronize()
-    
+
     with torch.profiler.profile(
         activities=activities,
         schedule=torch.profiler.schedule(wait=0, warmup=2, active=5),
@@ -184,14 +197,14 @@ if args.profile:
                     input_ids,
                     attention_mask=attention_mask,
                     max_new_tokens=args.max_new_tokens,
-                    **generate_kwargs
+                    **generate_kwargs,
                 )
                 prof.step()
-                
+
 if args.ze_tracer:
     device_interface.synchronize()
     os.environ["PTI_ENABLE_COLLECTION"] = "1"
-    
+
     with torch.no_grad(), torch.autocast(
         enabled=amp_enabled, device_type=args.device, dtype=load_dtype
     ):
@@ -199,7 +212,7 @@ if args.ze_tracer:
             input_ids,
             attention_mask=attention_mask,
             max_new_tokens=args.max_new_tokens,
-            **generate_kwargs
+            **generate_kwargs,
         )
     device_interface.synchronize()
     os.environ["PTI_ENABLE_COLLECTION"] = "0"
@@ -220,7 +233,7 @@ with torch.no_grad(), torch.autocast(
             input_ids,
             attention_mask=attention_mask,
             max_new_tokens=args.max_new_tokens,
-            **generate_kwargs
+            **generate_kwargs,
         )
         gen_ids = output[0]
         gen_text = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
