@@ -81,10 +81,11 @@ else:
 
 def trace_handler(prof):
     print(
-        prof.key_averages().table(
+        prof.key_averages(group_by_input_shape=True).table(
             sort_by=f"self_{args.device}_time_total",
             row_limit=-1,
-            max_name_column_width=100,
+            max_name_column_width=150,
+            max_shapes_column_width=150,
         )
     )
 
@@ -171,9 +172,7 @@ with torch.no_grad(), torch.autocast(
         )
 
 if args.profile:
-    activities = [
-        torch.profiler.ProfilerActivity.CPU,
-    ]
+    activities = [torch.profiler.ProfilerActivity.CPU]
     if "xpu" in args.device:
         activities.append(torch.profiler.ProfilerActivity.XPU)
     elif "cuda" in args.device:
@@ -182,14 +181,14 @@ if args.profile:
 
     with torch.profiler.profile(
         activities=activities,
-        schedule=torch.profiler.schedule(wait=0, warmup=2, active=5),
+        schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
         on_trace_ready=trace_handler,
         record_shapes=True,
     ) as prof:
         with torch.no_grad(), torch.autocast(
             enabled=amp_enabled, device_type=args.device, dtype=load_dtype
         ):
-            for i in range(7):
+            for i in range(1):
                 # input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(args.device)
 
                 # from torchinfo import summary
