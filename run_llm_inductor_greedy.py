@@ -85,7 +85,7 @@ def trace_handler(prof):
             sort_by=f"self_{args.device}_time_total",
             row_limit=-1,
             max_name_column_width=150,
-            max_shapes_column_width=150,
+            max_shapes_column_width=300,
         )
     )
 
