@@ -101,7 +101,7 @@ print("[INFO] attn_type = ", attn_type)
 
 config = LlamaConfig.from_json_file("configs/config.json")
 config.torch_dtype = load_dtype
-config.attn_implementation = attn_type
+config._attn_implementation = attn_type
 
 tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
 print("[INFO] tokenizer loaded")
