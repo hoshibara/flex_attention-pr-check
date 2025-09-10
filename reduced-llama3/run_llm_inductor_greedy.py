@@ -142,7 +142,7 @@ current_path = pathlib.Path(__file__).parent.resolve()
 if args.prompt is not None:
     prompt = args.prompt
 else:
-    with open(str(current_path) + "../prompt.json") as f:
+    with open(os.path.join(str(current_path), "../prompt.json")) as f:
         prompt_pool = json.load(f)
     if "llama" in prompt_pool and args.input_tokens in prompt_pool["llama"]:
         prompt = prompt_pool["llama"]["2048"]

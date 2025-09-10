@@ -8,6 +8,7 @@ set -u
 # --- Trap Handler ---
 # No temporary files to clean up in this version.
 DEVICE=xpu
+export DEVICE
 
 # --- Script Start ---
 start_time=$(date +%s)
@@ -20,8 +21,8 @@ TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Define the full path to the results directory
-RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-quantization"
-export RESULTS_DIR=$RESULTS_DIR
+RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-reduced-llama3"
+export RESULTS_DIR
 
 # --- Setup ---
 
@@ -72,6 +73,8 @@ python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-toke
 echo "Finished running llama3 models!"
 
 # --- Script End ---
+
+python process_log.py $RESULTS_DIR
 
 # Create the final marker file in the results directory.
 echo "Done" > "$RESULTS_DIR/finish.log"
