@@ -62,12 +62,12 @@ echo "Running llama3 models..."
 # FA profile
 python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=flex_attention \
-  >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.log" 2>&1
+  --device $DEVICE >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.log" 2>&1
 
 # sdpa profile
 python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 10 \
   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=sdpa \
-  >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.profile.log" 2>&1
+  --device $DEVICE >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.profile.log" 2>&1
 
 
 echo "Finished running llama3 models!"
