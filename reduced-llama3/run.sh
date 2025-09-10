@@ -65,7 +65,7 @@ python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-t
   --device $DEVICE >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.log" 2>&1
 
 # sdpa profile
-python run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 128 \
+python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 128 \
   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=sdpa \
   --device $DEVICE >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.profile.log" 2>&1
 
