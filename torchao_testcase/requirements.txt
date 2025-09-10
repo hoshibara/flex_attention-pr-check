@@ -1,0 +1,6 @@
+accelerate
+einops
+diffusers
+huggingface_hub
+lm_eval==0.4.2
+numpy
