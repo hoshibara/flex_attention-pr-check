@@ -136,8 +136,8 @@ if args.compile:
         )
         print("[INFO] Model compiled")
 
-print(f'torch.xpu.memory_allocated = {torch.xpu.memory_allocated()}')
-print(f'torch.xpu.memory_reserved = {torch.xpu.memory_reserved()}')
+print(f'device_interface.memory_allocated = {device_interface.memory_allocated()}')
+print(f'device_interface.memory_reserved = {device_interface.memory_reserved()}')
 
 # greedy search
 generate_kwargs = dict(
@@ -264,7 +264,7 @@ if args.max_new_tokens > 1:
     next_latency_list.sort()
     average_next_latency = np.mean(next_latency_list)
     p90_latency = np.percentile(next_latency_list, 90)
-print("first-token-latency: %.3f sec." % first_latency)
+print("first-token-latency: %.6f sec." % first_latency)
 if args.max_new_tokens > 1:
-    print("rest-token-latency: %.3f sec." % average_next_latency)
-    print("P90-rest-token-latency: %.3f sec." % p90_latency)
+    print("rest-token-latency: %.6f sec." % average_next_latency)
+    print("P90-rest-token-latency: %.6f sec." % p90_latency)
