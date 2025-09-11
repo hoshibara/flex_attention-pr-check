@@ -28,6 +28,9 @@ from transformers import (
 
 import torch
 
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "./logs")
+COUNT = 0
+
 parser = argparse.ArgumentParser(
     "LLM generation (greedy search) script for inductor torch.compile path",
     add_help=False,
@@ -81,6 +84,9 @@ else:
 
 
 def trace_handler(prof):
+    global COUNT
+    COUNT += 1
+    prof.export_chrome_trace(os.path.join(RESULTS_DIR, f"trace_{COUNT}_{args.attn_type}_{args.input_tokens}_{args.batch_size}_{args.device}.json"))
     print(
         prof.key_averages(group_by_input_shape=True).table(
             sort_by=f"self_{args.device}_time_total",
@@ -107,7 +113,7 @@ tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path)
 print("[INFO] tokenizer loaded")
 model = LlamaForCausalLM(config)
 print("[INFO] Model loaded")
-model = model.to(args.device)
+model = model.to(load_dtype).to(args.device)
 if attn_type == "paged_attention":
     model.generation_config.cache_implementation = "paged"
     model.config.page_size = args.page_size
@@ -129,6 +135,9 @@ if args.compile:
             dynamic=True,
         )
         print("[INFO] Model compiled")
+
+print(f'torch.xpu.memory_allocated = {torch.xpu.memory_allocated()}')
+print(f'torch.xpu.memory_reserved = {torch.xpu.memory_reserved()}')
 
 # greedy search
 generate_kwargs = dict(
