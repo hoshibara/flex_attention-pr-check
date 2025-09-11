@@ -21,8 +21,11 @@ TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Define the full path to the results directory
-RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-reduced-llama3"
-export RESULTS_DIR
+echo "GET RESULTS_DIR: $RESULTS_DIR"
+if [ -z "$RESULTS_DIR" ]; then
+  RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-reduced-llama3"
+  export RESULTS_DIR
+fi
 
 # --- Setup ---
 
@@ -60,18 +63,18 @@ fi
 echo "Running llama3 models..."
 
 # FA profile
-python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 2 \
-  --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=flex_attention \
+python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 16 \
+  --input-tokens 1024 --num-warmup 3 --num-iter 8 --compile --profile --attn_type=flex_attention \
   --device $DEVICE >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.log" 2>&1
 
 # FA verbose
-# ONEDNN_VERBOSE=all python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 2 \
+# ONEDNN_VERBOSE=all python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 16 \
 #   --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=flex_attention \
 #   --device $DEVICE >> "$RESULTS_DIR/llama31.fa.compile.xpu.profile.onednn.log" 2>&1
 
 # sdpa profile
-python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 2 \
-  --input-tokens 1024 --num-warmup 2 --num-iter 4 --compile --profile --attn_type=sdpa \
+python -u run_llm_inductor_greedy.py -m meta-llama/Meta-Llama-3.1-8B --max-new-tokens 16 \
+  --input-tokens 1024 --num-warmup 3 --num-iter 8 --compile --profile --attn_type=sdpa \
   --device $DEVICE >> "$RESULTS_DIR/llama31.sdpa.compile.xpu.profile.log" 2>&1
 
 
