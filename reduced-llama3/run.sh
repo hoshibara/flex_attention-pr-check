@@ -21,13 +21,11 @@ TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Define the full path to the results directory
-echo ""
-echo "GET RESULTS_DIR: $RESULTS_DIR"
 if [ -z "$RESULTS_DIR" ]; then
   RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-reduced-llama3"
   export RESULTS_DIR
 fi
-
+echo -e "\n\nGET RESULTS_DIR: $RESULTS_DIR\n"
 # --- Setup ---
 
 # Create the timestamped directory for results
