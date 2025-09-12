@@ -32,7 +32,6 @@ mkdir -p "$RESULTS_DIR" # Use -p to avoid error if directory already exists (unl
 export TORCHINDUCTOR_CACHE_DIR="$RESULTS_DIR/torchinductor_cache"
 echo "TORCHINDUCTOR_CACHE_DIR = $TORCHINDUCTOR_CACHE_DIR"
 
-
 # Collect environment information
 echo "Collecting environment information..."
 # Assuming collect_env.py is one directory level up from where this script is located
@@ -44,14 +43,14 @@ if [ ! -s "$COLLECT_ENV_SCRIPT" ]; then
 else
     # Redirect output to the results directory
     set +e
-    python "$COLLECT_ENV_SCRIPT" > "$RESULTS_DIR/collect_env.log" 2>&1
-    echo -e "\n\n$ pip list | grep transformers\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
-    pip list | grep transformers >> "$RESULTS_DIR/collect_env.log" 2>&1
-    echo -e "\n\n$ dpkg -l | grep igc\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
-    dpkg -l | grep igc >> "$RESULTS_DIR/collect_env.log" 2>&1
-    echo -e "\n\n$ dpkg -l | grep dkms\n" >> "$RESULTS_DIR/collect_env.log" 2>&1
-    dpkg -l | grep dkms >> "$RESULTS_DIR/collect_env.log" 2>&1
-    echo "Done collecting environment info." >> "$RESULTS_DIR/collect_env.log" # Append Done message to the log file
+    python "$COLLECT_ENV_SCRIPT" >"$RESULTS_DIR/collect_env.log" 2>&1
+    echo -e "\n\n$ pip list | grep transformers\n" >>"$RESULTS_DIR/collect_env.log" 2>&1
+    pip list | grep transformers >>"$RESULTS_DIR/collect_env.log" 2>&1
+    echo -e "\n\n$ dpkg -l | grep igc\n" >>"$RESULTS_DIR/collect_env.log" 2>&1
+    dpkg -l | grep igc >>"$RESULTS_DIR/collect_env.log" 2>&1
+    echo -e "\n\n$ dpkg -l | grep dkms\n" >>"$RESULTS_DIR/collect_env.log" 2>&1
+    dpkg -l | grep dkms >>"$RESULTS_DIR/collect_env.log" 2>&1
+    echo "Done collecting environment info." >>"$RESULTS_DIR/collect_env.log" # Append Done message to the log file
     echo "Environment log saved to $RESULTS_DIR/collect_env.log"
     set -e
 fi
@@ -59,23 +58,23 @@ fi
 echo "Running llama3 models..."
 
 python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 128 \
-    --num-iter 8 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
-    --sub-model-name mistral --use-static-cache --use-hf-code False --woq --woq-type rtn \
-    --group-size 128 --quant-dtype uint4 --profile --attn_type sdpa \
-    >> "$RESULTS_DIR/llama31.uint4.sdpa.$DEVICE.profile.log" 2>&1
+    --num-iter 2 --num-warmup 1 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+    --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --group-size 128 --quant-dtype uint4 --profile --attn_type flex_attention \
+    >>"$RESULTS_DIR/llama31.uint4.fa.$DEVICE.profile.log" 2>&1
 
 python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 128 \
     --num-iter 8 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
     --sub-model-name mistral --use-static-cache --use-hf-code False --woq --woq-type rtn \
-    --group-size 128 --quant-dtype uint4 --profile --attn_type flex_attention \
-    >> "$RESULTS_DIR/llama31.uint4.fa.$DEVICE.profile.log" 2>&1
+    --group-size 128 --quant-dtype uint4 --profile --attn_type sdpa \
+    >>"$RESULTS_DIR/llama31.uint4.sdpa.$DEVICE.profile.log" 2>&1
 
 echo "Finished running llama3 models!"
 
 # --- Script End ---
 
 # Create the final marker file in the results directory.
-echo "Done" > "$RESULTS_DIR/finish.log"
+echo "Done" >"$RESULTS_DIR/finish.log"
 echo "All specified test runs completed."
 echo "Detailed logs and results, including collected commands, are located in the '$RESULTS_DIR/' directory."
 echo "Command files: $RESULTS_DIR/*.commands.txt"
@@ -88,7 +87,7 @@ echo "Test logs: $RESULTS_DIR/*.test.log"
 end_time=$(date +%s)
 elapsed_time=$((end_time - start_time))
 echo "Total elapsed time: $((elapsed_time / 60)) minutes and $((elapsed_time % 60)) seconds."
-echo "Total elapsed time: $((elapsed_time / 60)) minutes and $((elapsed_time % 60)) seconds." >> "$RESULTS_DIR/finish.log"
+echo "Total elapsed time: $((elapsed_time / 60)) minutes and $((elapsed_time % 60)) seconds." >>"$RESULTS_DIR/finish.log"
 echo "Script completed successfully at $(date '+%Y-%m-%d %H:%M:%S')."
 
 exit 0
