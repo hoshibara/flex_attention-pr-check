@@ -6,8 +6,9 @@ git remote add hoshibara https://github.com/hoshibara/transformers.git
 git remote -v
 git fetch hoshibara
 git branch -vv
-git checkout v4.51.3
-git apply --ignore-space-change --ignore-whitespace /home/xingyuan/projects/20250910-FA/flex_attention-pr-check/torchao_testcase/transformers.patch
+# git checkout v4.51.3
+# git apply --ignore-space-change --ignore-whitespace /home/xingyuan/projects/20250910-FA/flex_attention-pr-check/torchao_testcase/transformers.patch
+git checkout hoshibara/FA-latency
 cd ..
 
 pip uninstall transformers -y

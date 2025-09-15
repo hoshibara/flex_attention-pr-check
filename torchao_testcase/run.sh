@@ -65,7 +65,7 @@ python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1
 
 python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 128 \
     --num-iter 8 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
-    --sub-model-name mistral --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --use-static-cache --use-hf-code False --woq --woq-type rtn \
     --group-size 128 --quant-dtype uint4 --profile --attn_type sdpa \
     >>"$RESULTS_DIR/llama31.uint4.sdpa.$DEVICE.profile.log" 2>&1
 
