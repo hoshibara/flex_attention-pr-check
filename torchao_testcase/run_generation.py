@@ -446,7 +446,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             if args.device == "xpu":
                 torch.xpu.synchronize()
         # make dynamo clean redundant guards
-        torch.compiler.set_stance(skip_guard_eval_unsafe=True)
+        torch.compiler.set_stance(skip_guard_eval_unsafe=False)
 
     with torch.inference_mode(), torch.no_grad(), torch.autocast(
         device_type=args.device,
