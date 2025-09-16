@@ -1,15 +1,16 @@
 import os
 import sys
 import logging
+
 # Robust logging setup: remove all root handlers and configure logging before any other imports
 for handler in logging.root.handlers[:]:
     print("Before setup, remove log root handler: ", handler)
     logging.root.removeHandler(handler)
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=LOG_LEVEL,
     stream=sys.stdout,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger()  # Use root logger for reliability
 
@@ -29,15 +30,13 @@ from transformers import (
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import gc
+
 # Set console encoding to UTF-8
-if os.name == 'nt':
-    os.system('chcp 65001')
-    sys.stdout.reconfigure(encoding='utf-8')
+if os.name == "nt":
+    os.system("chcp 65001")
+    sys.stdout.reconfigure(encoding="utf-8")
 
-RESULTS_DIR = os.environ.get('RESULTS_DIR', './logs')
-
-
-
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "./logs")
 
 
 # --- Single parser: all arguments, no subparser ---
@@ -45,43 +44,131 @@ import argparse
 
 parser = argparse.ArgumentParser("Generation script (fp32/bf16/fp16 path)")
 parser.add_argument("-m", "--model-id", type=str, help="the huggingface model id")
-parser.add_argument('--sub-model-name', type=str, default="", help="the sub model name for accuracy check")
-parser.add_argument("--device", type=str, choices=["cpu", "xpu", "cuda"], default="xpu", help="xpu, cuda or cpu")
-parser.add_argument("--dtype", type=str, choices=["float32", "bfloat16", "float16"], default="bfloat16", help="float16, bfloat16, float32")
-parser.add_argument("--input-tokens", default="32", type=str, help="input tokens length if needed from prompt.json")
-parser.add_argument("--max-new-tokens", default=32, type=int, help="output max new tokens")
-parser.add_argument("--prompt", default=None, type=str, help="input prompt for self-defined if needed")
+parser.add_argument(
+    "--sub-model-name",
+    type=str,
+    default="",
+    help="the sub model name for accuracy check",
+)
+parser.add_argument(
+    "--device",
+    type=str,
+    choices=["cpu", "xpu", "cuda"],
+    default="xpu",
+    help="xpu, cuda or cpu",
+)
+parser.add_argument(
+    "--dtype",
+    type=str,
+    choices=["float32", "bfloat16", "float16"],
+    default="bfloat16",
+    help="float16, bfloat16, float32",
+)
+parser.add_argument(
+    "--input-tokens",
+    default="32",
+    type=str,
+    help="input tokens length if needed from prompt.json",
+)
+parser.add_argument(
+    "--max-new-tokens", default=32, type=int, help="output max new tokens"
+)
+parser.add_argument(
+    "--prompt", default=None, type=str, help="input prompt for self-defined if needed"
+)
 parser.add_argument("--batch-size", default=1, type=int, help="batch size")
 parser.add_argument("--num-iter", default=10, type=int, help="num iter")
 parser.add_argument("--num-warmup", default=3, type=int, help="num warmup")
 parser.add_argument("--num-beams", default=1, type=int, help="beam width")
 parser.add_argument("--greedy", action="store_true")
-parser.add_argument("--use-hf-code", default="False", choices=["True", "False"], type=str, help="use hf transformers code")
-parser.add_argument("--use-static-cache", action="store_true", help="use static kv cache")
-parser.add_argument("--amp", action="store_true", help="whether to enable auto-mixed-precision feature")
+parser.add_argument(
+    "--use-hf-code",
+    default="False",
+    choices=["True", "False"],
+    type=str,
+    help="use hf transformers code",
+)
+parser.add_argument(
+    "--use-static-cache", action="store_true", help="use static kv cache"
+)
+parser.add_argument(
+    "--amp", action="store_true", help="whether to enable auto-mixed-precision feature"
+)
 parser.add_argument("--inductor", action="store_true")
 # debug related args.
 parser.add_argument("--profile", action="store_true")
 parser.add_argument("--unitrace", action="store_true")
 # accuracy related args.
 parser.add_argument("--accuracy-only", action="store_true")
-parser.add_argument("--acc-tasks", default="gsm8k", type=str, help="tasks list for accuracy validation")
+parser.add_argument(
+    "--acc-tasks", default="gsm8k", type=str, help="tasks list for accuracy validation"
+)
 parser.add_argument("--acc-iter", default=-1, type=int)
 # Log related args.
 parser.add_argument("--print-memory", action="store_true")
-parser.add_argument("--token-latency", action="store_true", help="get token latency breakdown")
-parser.add_argument("--output-csv-path", default="output.csv", type=str, help="path to output CSV file (default: output.csv)")
+parser.add_argument(
+    "--token-latency", action="store_true", help="get token latency breakdown"
+)
+parser.add_argument(
+    "--output-csv-path",
+    default="output.csv",
+    type=str,
+    help="path to output CSV file (default: output.csv)",
+)
 # Quantization-specific args
-parser.add_argument("--quant-mode", type=str, default=None, choices=["woq"], help="Quantization Mode. (default: None)")
-parser.add_argument("--woq", default=False, action="store_true", help="Weight Only Quantization shortcut")
-parser.add_argument("--group-size", default=128, type=int, help="group size, default is 128")
-parser.add_argument("--ZPFLOAT", action="store_true", help="use float zero point. If not set, it will use ZeroPointDomain.INT")
-parser.add_argument("--calibration-samples", type=int, default=10, help="Number of samples for calibration. Default is 10")
-parser.add_argument("--model-save-path", type=str, default=None, help="Path to store the scale values")
-parser.add_argument("--load-quantize-model", action="store_true", help="Load quantized model. If set, it will load the model from the specified path and apply quantization.")
-parser.add_argument("--woq-type", choices=["rtn", "awq"], default="rtn", help="WOQ quantization type, by default, it will be rtn")
-parser.add_argument("--quant-dtype", type=str, default="uint4", choices=["unit1", "uint4", "uint8"], help="The data type of the quantized weights for AWQ. Currently only torch.uint4 is intended to be used but can be used with torch.uint1 -> torch.uint8")
-parser.add_argument("--use-hqq", action="store_true", help="Enable HQQ quantization for AWQ (default: False)")
+parser.add_argument(
+    "--quant-mode",
+    type=str,
+    default=None,
+    choices=["woq"],
+    help="Quantization Mode. (default: None)",
+)
+parser.add_argument(
+    "--woq",
+    default=False,
+    action="store_true",
+    help="Weight Only Quantization shortcut",
+)
+parser.add_argument(
+    "--group-size", default=128, type=int, help="group size, default is 128"
+)
+parser.add_argument(
+    "--ZPFLOAT",
+    action="store_true",
+    help="use float zero point. If not set, it will use ZeroPointDomain.INT",
+)
+parser.add_argument(
+    "--calibration-samples",
+    type=int,
+    default=10,
+    help="Number of samples for calibration. Default is 10",
+)
+parser.add_argument(
+    "--model-save-path", type=str, default=None, help="Path to store the scale values"
+)
+parser.add_argument(
+    "--load-quantize-model",
+    action="store_true",
+    help="Load quantized model. If set, it will load the model from the specified path and apply quantization.",
+)
+parser.add_argument(
+    "--woq-type",
+    choices=["rtn", "awq"],
+    default="rtn",
+    help="WOQ quantization type, by default, it will be rtn",
+)
+parser.add_argument(
+    "--quant-dtype",
+    type=str,
+    default="uint4",
+    choices=["unit1", "uint4", "uint8"],
+    help="The data type of the quantized weights for AWQ. Currently only torch.uint4 is intended to be used but can be used with torch.uint1 -> torch.uint8",
+)
+parser.add_argument(
+    "--use-hqq",
+    action="store_true",
+    help="Enable HQQ quantization for AWQ (default: False)",
+)
 parser.add_argument(
     "--attn_type",
     default="flex_attention",
@@ -98,15 +185,23 @@ if args.woq:
 args.use_hf_code = args.use_hf_code == "True"
 logger.info(args)
 
-do_profiling = os.environ.get("PROFILE", "OFF").upper() in ["1", "Y", "ON", "YES", "TRUE"]
+do_profiling = os.environ.get("PROFILE", "OFF").upper() in [
+    "1",
+    "Y",
+    "ON",
+    "YES",
+    "TRUE",
+]
 do_profiling = args.profile or do_profiling
 
 # device
 device = torch.device(args.device)
 
+
 # adapted from: https://github.com/mit-han-lab/llm-awq/blob/main/awq/entry.py#L255
 def get_calib_dataset(tokenizer=None, n_samples=100, block_size=512):
     from datasets import load_dataset
+
     dataset = load_dataset("mit-han-lab/pile-val-backup", split="validation")
     samples = []
     n_tokens = n_samples * block_size
@@ -129,6 +224,7 @@ def get_calib_dataset(tokenizer=None, n_samples=100, block_size=512):
     return [
         cat_samples[:, i * block_size : (i + 1) * block_size] for i in range(n_samples)
     ]
+
 
 # dtype
 amp_enabled = True if args.dtype != "float32" and args.amp else False
@@ -176,12 +272,16 @@ if args.quant_mode == "woq" and args.woq_type == "rtn":
     # For CUDA, TensorCoreTiledLayout() is the default layout, and it does not require the zero_point settings
     if args.device == "xpu":
         quant_kwargs["layout"] = Int4XPULayout()
-        zero_point_domain = ZeroPointDomain.FLOAT if args.ZPFLOAT else ZeroPointDomain.INT
+        zero_point_domain = (
+            ZeroPointDomain.FLOAT if args.ZPFLOAT else ZeroPointDomain.INT
+        )
         quant_kwargs["zero_point_domain"] = zero_point_domain
 
     quantization_config = TorchAoConfig(**quant_kwargs)
 
-    logger.info(f"Using {args.device} device for int4_weight_only RTN mode, Using TorchAoConfig: {quantization_config}")
+    logger.info(
+        f"Using {args.device} device for int4_weight_only RTN mode, Using TorchAoConfig: {quantization_config}"
+    )
     device_map = args.device
 
 # Always load model/tokenizer here, quantization_config is None for AWQ
@@ -195,7 +295,9 @@ model = model_class[0].from_pretrained(
     quantization_config=quantization_config,
     attn_implementation=args.attn_type,
 )
-tokenizer = model_class[1].from_pretrained(args.model_id, trust_remote_code=args.use_hf_code)
+tokenizer = model_class[1].from_pretrained(
+    args.model_id, trust_remote_code=args.use_hf_code
+)
 
 # For AWQ, quantize after loading
 if args.quant_mode == "woq" and args.woq_type == "awq":
@@ -209,6 +311,7 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
 
     if args.load_quantize_model:
         import types
+
         def load_awq_weight(module, state_dict, name=""):
             observed_linear = module
             qw = state_dict[name + ".weight"]
@@ -225,7 +328,12 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
             return linear
 
         def _replace_with_custom_fn_if_matches_filter(
-            model, replacement_fn, filter_fn, cur_fqn="", device=None, extra_args: Dict = {}
+            model,
+            replacement_fn,
+            filter_fn,
+            cur_fqn="",
+            device=None,
+            extra_args: Dict = {},
         ):
             if filter_fn(model, cur_fqn[:-1]):
                 if device is not None:
@@ -234,7 +342,12 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
                 return model
             for name, child in list(model.named_children()):
                 new_child = _replace_with_custom_fn_if_matches_filter(
-                    child, replacement_fn, filter_fn, f"{cur_fqn}{name}.", device, extra_args
+                    child,
+                    replacement_fn,
+                    filter_fn,
+                    f"{cur_fqn}{name}.",
+                    device,
+                    extra_args,
                 )
                 if new_child is not child and new_child is not None:
                     setattr(model, name, new_child)
@@ -245,7 +358,10 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
         def load_awq(model, state_dict, filter_fn=None):
             filter_fn = _is_linear if filter_fn is None else filter_fn
             return _replace_with_custom_fn_if_matches_filter(
-                model, replacement_fn=load_awq_weight, filter_fn=filter_fn, extra_args=state_dict
+                model,
+                replacement_fn=load_awq_weight,
+                filter_fn=filter_fn,
+                extra_args=state_dict,
             )
 
         logger.info(f"load awq model from {args.model_save_path}")
@@ -260,8 +376,12 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
         quant_dtype = getattr(torch, args.quant_dtype)
         group_size = args.group_size
         logger.info(f"running {quant_dtype} calibration")
-        insert_awq_observer_(model, 1, 512, quant_dtype=quant_dtype, group_size=group_size)
-        calibration_data = get_calib_dataset(tokenizer=tokenizer, n_samples=args.calibration_samples, block_size=512)
+        insert_awq_observer_(
+            model, 1, 512, quant_dtype=quant_dtype, group_size=group_size
+        )
+        calibration_data = get_calib_dataset(
+            tokenizer=tokenizer, n_samples=args.calibration_samples, block_size=512
+        )
         for batch in calibration_data:
             if batch.numel() == 0:
                 continue
@@ -269,7 +389,9 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
             batch.to("cpu")
         is_observed_linear = lambda m, fqn: isinstance(m, AWQObservedLinear)
         use_hqq = args.use_hqq
-        awq_uintx_config = awq_uintx(quant_dtype=quant_dtype, group_size=group_size, use_hqq=use_hqq)
+        awq_uintx_config = awq_uintx(
+            quant_dtype=quant_dtype, group_size=group_size, use_hqq=use_hqq
+        )
         if "xpu" in device.type:
             awq_uintx_config.layout = Int4XPULayout()
         quantize_(model, awq_uintx_config, is_observed_linear)
@@ -278,31 +400,42 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
             torch.save(model.state_dict(), args.model_save_path)
 
 model = model.eval().to(device)
+
+
 def get_memory_usage(name, args):
     if args.print_memory:
         if args.device == "xpu":
             memory_allocated = round(torch.xpu.memory_reserved() / 1024**3, 3)
         logger.debug(f"{name} memory used total: {memory_allocated} GB")
+
+
 get_memory_usage("model", args)
 
 if args.inductor:
-    from torch._functorch._aot_autograd.subclass_parametrization import unwrap_tensor_subclass_parameters
+    from torch._functorch._aot_autograd.subclass_parametrization import (
+        unwrap_tensor_subclass_parameters,
+    )
+
     # To optimize model with quantized by torchao, which introduce subclass and has more host overhead
     # in dynamo. This function can unwarp subclass and make torch.compile faster.
     # Skip the accuracy only and config.tie_word_embeddings to avoid error.
     if (not args.accuracy_only) or (not config.tie_word_embeddings):
-        logger.info(f"For model {args.model_id}, skipped the unwarp_tensor_subclass_parameters. This may affect performance")
+        logger.info(
+            f"For model {args.model_id}, skipped the unwarp_tensor_subclass_parameters. This may affect performance"
+        )
         unwrap_tensor_subclass_parameters(model)
 
     # cpp_warpper makes inductor generate pure C++ code instead of python code for graph execution,
     # which can reduce host overhead. Current AOTI only support Linux platform.
     if sys.platform.startswith("linux"):
         import torch._inductor.config as inductor_config
+
         inductor_config.cpp_wrapper = True
-    
+
     model.forward = torch.compile(model.forward)
 
 ######################## run lm eval accuracy check ########################
+
 
 def run_accuracy(model, tokenizer, max_length, tasks=["gsm8k"], device="xpu"):
     import lm_eval
@@ -338,9 +471,12 @@ def run_accuracy(model, tokenizer, max_length, tasks=["gsm8k"], device="xpu"):
             if args.acc_iter > 0:
                 eval_kwargs["limit"] = args.acc_iter
             results[tag] = lm_eval.evaluator.simple_evaluate(**eval_kwargs)
-            logger.info(f"Accuracy Result on {args.model_id}\n{make_table(results[tag])}")
+            logger.info(
+                f"Accuracy Result on {args.model_id}\n{make_table(results[tag])}"
+            )
 
     return results
+
 
 if args.accuracy_only:
     run_accuracy(model, tokenizer, 128, tasks=args.acc_tasks)
@@ -348,7 +484,7 @@ if args.accuracy_only:
 
 ######################## run generation benchmark ########################
 # generate args
-generation_config= GenerationConfig(
+generation_config = GenerationConfig(
     cache_implementation="static" if args.use_static_cache else None,
     do_sample=False,
     num_beams=1 if args.greedy else args.num_beams,
@@ -361,8 +497,11 @@ current_path = pathlib.Path(__file__).parent.resolve()
 with open(str(current_path) + "/prompt.json", encoding="utf8") as f:
     prompt_pool = json.load(f)
 
+
 def run_generate(num_tokens, num_input_tokens, num_beams):
-    logger.debug(f"*** Starting to generate {num_tokens} tokens for {num_input_tokens} tokens with num_beams={num_beams}")
+    logger.debug(
+        f"*** Starting to generate {num_tokens} tokens for {num_input_tokens} tokens with num_beams={num_beams}"
+    )
     if args.prompt is not None:
         prompt = args.prompt
     elif model_type == "auto":
@@ -385,43 +524,56 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         generate_kwargs["token_latency"] = True
 
     # take the ref_prompt as reference for accuracy check
-    f1 = open(os.path.join(os.path.dirname(__file__), "ref_prompt.json"), encoding="utf8")
+    f1 = open(
+        os.path.join(os.path.dirname(__file__), "ref_prompt.json"), encoding="utf8"
+    )
     prompt_json = json.load(f1)
     f1.close()
-    ref_prompt=None
-    ref_prompt_cuda=None
+    ref_prompt = None
+    ref_prompt_cuda = None
     token_support = [(32, 32), (1024, 128)]
     # we take cpu as ref_propmt, hence skip the accuracy check when using cpu.
     if (int(num_input_tokens), num_tokens) in token_support and args.device == "xpu":
         if args.sub_model_name in prompt_json:
-            ref_prompt = prompt_json[args.sub_model_name][f"{num_input_tokens}-{num_tokens}"][f"{num_beams}"]
+            ref_prompt = prompt_json[args.sub_model_name][
+                f"{num_input_tokens}-{num_tokens}"
+            ][f"{num_beams}"]
         try:
-            ref_prompt_cuda = prompt_json[args.sub_model_name][f"{num_input_tokens}-{num_tokens}"][f"cuda-result: {num_beams}"]
+            ref_prompt_cuda = prompt_json[args.sub_model_name][
+                f"{num_input_tokens}-{num_tokens}"
+            ][f"cuda-result: {num_beams}"]
         except Exception:
             pass
     acc_pass = 0
 
     # profiling context
     sort_by_keyword = "self_" + args.device + "_time_total"
+
     def trace_handler(p):
-        output = p.key_averages().table(sort_by=sort_by_keyword, row_limit=10)
+        output = p.key_averages(group_by_input_shape=True).table(
+            sort_by=sort_by_keyword,
+            row_limit=-1,
+            max_name_column_width=150,
+            max_shapes_column_width=300,
+        )
         logger.info(output)
-        p.export_chrome_trace(os.path.join(RESULTS_DIR, "trace_step" + str(p.step_num) + ".json"))
+        p.export_chrome_trace(
+            os.path.join(RESULTS_DIR, "trace_step" + str(p.step_num) + ".json")
+        )
+
     profling_context = contextlib.nullcontext()
     if do_profiling:
         if args.unitrace:
             profling_context = torch.autograd.profiler.emit_itt()
         else:
             profling_context = torch.profiler.profile(
-                activities=[torch.profiler.ProfilerActivity.CPU,
-                             torch.profiler.ProfilerActivity.XPU],
+                activities=[
+                    torch.profiler.ProfilerActivity.CPU,
+                    torch.profiler.ProfilerActivity.XPU,
+                ],
                 record_shapes=True,
-                schedule=torch.profiler.schedule(
-                    wait=1,
-                    warmup=1,
-                    active=1,
-                    repeat=3),
-                on_trace_ready=trace_handler
+                schedule=torch.profiler.schedule(wait=1, warmup=1, active=1, repeat=3),
+                on_trace_ready=trace_handler,
             )
 
     # start
@@ -440,9 +592,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             dtype=amp_dtype if amp_enabled else None,
         ):
             input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-            output = model.generate(
-                input_ids, generation_config, **generate_kwargs
-            )
+            output = model.generate(input_ids, generation_config, **generate_kwargs)
             if args.device == "xpu":
                 torch.xpu.synchronize()
         # make dynamo clean redundant guards
@@ -452,17 +602,19 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         device_type=args.device,
         enabled=amp_enabled,
         dtype=amp_dtype if amp_enabled else None,
-    ):  
+    ):
         with profling_context as prof:
             for i in range(num_iter):
                 # Clean the cache to avoid potential OOM
-                torch.xpu.empty_cache() if args.device == "xpu" else torch.cuda.empty_cache()
+                (
+                    torch.xpu.empty_cache()
+                    if args.device == "xpu"
+                    else torch.cuda.empty_cache()
+                )
                 gc.collect()
                 tic = time.time()
                 input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-                output = model.generate(
-                    input_ids, generation_config, **generate_kwargs
-                )
+                output = model.generate(input_ids, generation_config, **generate_kwargs)
                 gen_ids = output[0] if args.token_latency else output
                 gen_text = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
                 if args.device == "xpu":
@@ -474,7 +626,9 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
                     o - i if model.config.model_type != "t5" else o
                     for i, o in zip(input_tokens_lengths, output_tokens_lengths)
                 ]
-                logger.info(f" Generated text:\n{gen_text},\n Total New Tokens: {total_new_tokens}")
+                logger.info(
+                    f" Generated text:\n{gen_text},\n Total New Tokens: {total_new_tokens}"
+                )
                 logger.info(f"Iteration: {i}, Time: {toc - tic:.6f} sec")
                 if i >= num_warmup:
                     total_time += toc - tic
@@ -492,8 +646,8 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
     latency = total_time / (num_iter - num_warmup)
     logger.info(f"Inference Total Latency: {latency:.5f} sec.")
 
-    first_latency=0
-    average_2n_latency=0
+    first_latency = 0
+    average_2n_latency = 0
 
     if args.token_latency:
         import numpy as np
@@ -513,12 +667,40 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         "next_token": average_2n_latency if args.token_latency else "N/A",
         "data_type": args.dtype,
         "quant_mode": args.quant_mode if hasattr(args, "quant_mode") else None,
-        "woq_type": args.woq_type if hasattr(args, "woq_type") and args.quant_mode == "woq" else None,
-        "group_size": args.group_size if hasattr(args, "group_size") and args.quant_mode == "woq" else None,
-        "quant_dtype": args.quant_dtype if hasattr(args, "quant_dtype") and args.quant_mode == "woq" else None,
-        "ZPFLOAT": args.ZPFLOAT if hasattr(args, "ZPFLOAT") and args.quant_mode == "woq" else None,
-        "use_hqq": args.use_hqq if hasattr(args, "use_hqq") and args.quant_mode == "woq" and args.woq_type == "awq" else None,
-        "load_quantize_model": args.load_quantize_model if hasattr(args, "load_quantize_model") and args.quant_mode == "woq" and args.woq_type == "awq" else None,
+        "woq_type": (
+            args.woq_type
+            if hasattr(args, "woq_type") and args.quant_mode == "woq"
+            else None
+        ),
+        "group_size": (
+            args.group_size
+            if hasattr(args, "group_size") and args.quant_mode == "woq"
+            else None
+        ),
+        "quant_dtype": (
+            args.quant_dtype
+            if hasattr(args, "quant_dtype") and args.quant_mode == "woq"
+            else None
+        ),
+        "ZPFLOAT": (
+            args.ZPFLOAT
+            if hasattr(args, "ZPFLOAT") and args.quant_mode == "woq"
+            else None
+        ),
+        "use_hqq": (
+            args.use_hqq
+            if hasattr(args, "use_hqq")
+            and args.quant_mode == "woq"
+            and args.woq_type == "awq"
+            else None
+        ),
+        "load_quantize_model": (
+            args.load_quantize_model
+            if hasattr(args, "load_quantize_model")
+            and args.quant_mode == "woq"
+            and args.woq_type == "awq"
+            else None
+        ),
         "input_tokens": args.input_tokens,
         "max_next_tokens": args.max_new_tokens,
         "amp": args.amp,
@@ -530,20 +712,24 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
 
     def write_to_csv(output_data, csv_file_path):
         file_exists = os.path.isfile(csv_file_path)
-        with open(csv_file_path, mode='a', newline='') as csv_file:
+        with open(csv_file_path, mode="a", newline="") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=output_data)
             if not file_exists:
                 writer.writeheader()
             writer.writerow(output_data)
+
     write_to_csv(output_data, args.output_csv_path)
 
     if args.device == "xpu":
         if ref_prompt is None:
             logger.debug("Accuracy check skip")
-        elif acc_pass==args.num_iter:
+        elif acc_pass == args.num_iter:
             logger.debug("Accuracy check pass")
         else:
-            logger.debug(f"Accuracy check fail, the wrong iteration number is: {args.num_iter - acc_pass}")
+            logger.debug(
+                f"Accuracy check fail, the wrong iteration number is: {args.num_iter - acc_pass}"
+            )
+
 
 def to_list(obj):
     if not isinstance(obj, list):
@@ -551,5 +737,8 @@ def to_list(obj):
     else:
         return obj
 
-for o, i, g in zip(to_list(args.max_new_tokens), to_list(args.input_tokens), to_list(args.num_beams)):
+
+for o, i, g in zip(
+    to_list(args.max_new_tokens), to_list(args.input_tokens), to_list(args.num_beams)
+):
     run_generate(o, i, g)

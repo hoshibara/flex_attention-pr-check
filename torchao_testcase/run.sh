@@ -59,6 +59,7 @@ else
 fi
 
 echo "Running llama3 models..."
+set +e
 
 python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 128 \
     --num-iter 2 --num-warmup 1 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
@@ -72,6 +73,7 @@ python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1
     --group-size 128 --quant-dtype uint4 --profile --attn_type sdpa \
     >>"$RESULTS_DIR/llama31.uint4.sdpa.$DEVICE.profile.log" 2>&1
 
+set -e
 echo "Finished running llama3 models!"
 
 # --- Script End ---
