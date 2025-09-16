@@ -65,7 +65,7 @@ parser.add_argument("--profile", action="store_true")
 parser.add_argument("--unitrace", action="store_true")
 # accuracy related args.
 parser.add_argument("--accuracy-only", action="store_true")
-parser.add_argument("--acc-tasks", default="lambada_standard", type=str, help="tasks list for accuracy validation, only enabled lambada_standard and lambada_standard at present")
+parser.add_argument("--acc-tasks", default="gsm8k", type=str, help="tasks list for accuracy validation")
 parser.add_argument("--acc-iter", default=-1, type=int)
 # Log related args.
 parser.add_argument("--print-memory", action="store_true")
@@ -169,14 +169,19 @@ if args.quant_mode == "woq" and args.woq_type == "rtn":
     from torchao.quantization.quant_primitives import ZeroPointDomain
     from transformers import TorchAoConfig
 
-    zero_point = ZeroPointDomain.FLOAT if args.ZPFLOAT else ZeroPointDomain.INT
-    quantization_config = TorchAoConfig(
-        "int4_weight_only",
-        group_size=args.group_size,
-        layout=Int4XPULayout() if args.device == "xpu" else None,
-        zero_point_domain=zero_point
-    )
-    logger.info(f"Using {args.device} device for int4_weight_only RTN mode, zero_point domain: {zero_point}")
+    quant_kwargs = {
+        "quant_type": "int4_weight_only",
+        "group_size": args.group_size,
+    }
+    # For CUDA, TensorCoreTiledLayout() is the default layout, and it does not require the zero_point settings
+    if args.device == "xpu":
+        quant_kwargs["layout"] = Int4XPULayout()
+        zero_point_domain = ZeroPointDomain.FLOAT if args.ZPFLOAT else ZeroPointDomain.INT
+        quant_kwargs["zero_point_domain"] = zero_point_domain
+
+    quantization_config = TorchAoConfig(**quant_kwargs)
+
+    logger.info(f"Using {args.device} device for int4_weight_only RTN mode, Using TorchAoConfig: {quantization_config}")
     device_map = args.device
 
 # Always load model/tokenizer here, quantization_config is None for AWQ
@@ -319,6 +324,7 @@ def run_accuracy(model, tokenizer, max_length, tasks=["gsm8k"], device="xpu"):
         ("arc_challenge", 25),
         ("hellaswag", 10),
         ("gsm8k", 5),
+        ("lambda_standard", 0),
     ]
 
     for tag, fewshot in eval_tasks:
@@ -337,7 +343,7 @@ def run_accuracy(model, tokenizer, max_length, tasks=["gsm8k"], device="xpu"):
     return results
 
 if args.accuracy_only:
-    run_accuracy(model, tokenizer, 128)
+    run_accuracy(model, tokenizer, 128, tasks=args.acc_tasks)
     sys.exit(0)
 
 ######################## run generation benchmark ########################
@@ -440,7 +446,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             if args.device == "xpu":
                 torch.xpu.synchronize()
         # make dynamo clean redundant guards
-        torch.compiler.set_stance(skip_guard_eval_unsafe=False)
+        torch.compiler.set_stance(skip_guard_eval_unsafe=True)
 
     with torch.inference_mode(), torch.no_grad(), torch.autocast(
         device_type=args.device,
