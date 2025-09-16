@@ -7,7 +7,10 @@ set -u
 
 # --- Trap Handler ---
 # No temporary files to clean up in this version.
-DEVICE=xpu
+if [ -z "${DEVICE:-}" ]; then
+  DEVICE=xpu
+  export DEVICE
+fi
 
 # --- Script Start ---
 start_time=$(date +%s)
