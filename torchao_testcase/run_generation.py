@@ -566,13 +566,20 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         if args.unitrace:
             profling_context = torch.autograd.profiler.emit_itt()
         else:
+            activities = [torch.profiler.ProfilerActivity.CPU]
+            if "xpu" in args.device:
+                activities.append(torch.profiler.ProfilerActivity.XPU)
+            elif "cuda" in args.device:
+                activities.append(torch.profiler.ProfilerActivity.CUDA)
             profling_context = torch.profiler.profile(
-                activities=[
-                    torch.profiler.ProfilerActivity.CPU,
-                    torch.profiler.ProfilerActivity.XPU,
-                ],
+                activities=activities,
                 record_shapes=True,
-                schedule=torch.profiler.schedule(wait=1, warmup=1, active=1, repeat=3),
+                schedule=torch.profiler.schedule(
+                    wait=0,
+                    warmup=0,
+                    active=args.num_iter - args.num_warmup,
+                    skip_first=args.num_warmup,
+                ),
                 on_trace_ready=trace_handler,
             )
 
