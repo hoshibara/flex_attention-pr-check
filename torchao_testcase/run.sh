@@ -78,6 +78,8 @@ echo "Finished running llama3 models!"
 
 # --- Script End ---
 
+python $SCRIPT_DIR/process_log.py $RESULTS_DIR
+
 # Create the final marker file in the results directory.
 echo "Done" >"$RESULTS_DIR/finish.log"
 echo "All specified test runs completed."

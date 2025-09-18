@@ -5,6 +5,7 @@ import argparse
 import fnmatch
 
 all_deduped = set()
+DEVICE = os.environ.get("DEVICE", "xpu").upper()
 
 
 def process_onednn_log(file_path, output_dir):
@@ -112,21 +113,26 @@ def process_torch_profile(file_path, output_dir):
             {
                 "Name": row.get("Name", ""),
                 "Input Shapes": row.get("Input Shapes", "[]"),
-                "XPU total": parse_time_string(row.get("XPU total", "0.0")),
+                f"{DEVICE} total": parse_time_string(row.get(f"{DEVICE} total", "0.0")),
                 "# of Calls": int(row.get("# of Calls", "0").replace(",", "")),
             }
         )
 
     global all_deduped
-    #filter XPU total
-    results = list(filter(lambda x: x["XPU total"] > 0, results))
+    # filter DEVICE total
+    results = list(filter(lambda x: x[f"{DEVICE} total"] > 0, results))
     results = list(filter(lambda x: x["Input Shapes"] != "[]", results))
-    deduped = sorted(set((r["Name"], r["# of Calls"], r["XPU total"], r["Input Shapes"]) for r in results))
+    deduped = sorted(
+        set(
+            (r["Name"], r["# of Calls"], r[f"{DEVICE} total"], r["Input Shapes"])
+            for r in results
+        )
+    )
     all_deduped.update(deduped)
 
     with open(output_filename, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Name", "Call Num", "XPU total", "Input Shapes"])
+        writer.writerow(["Name", "Call Num", f"{DEVICE} total", "Input Shapes"])
         writer.writerows(deduped)
 
     print(f"Saved processed CSV to {output_filename}")
@@ -169,7 +175,7 @@ def main():
     all_deduped = sorted(all_deduped)
     with open(all_deduped_output_filename, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Name", "Call Num", "XPU total", "Input Shapes"])
+        writer.writerow(["Name", "Call Num", f"{DEVICE} total", "Input Shapes"])
         writer.writerows(all_deduped)
 
     if processed_count == 0:
