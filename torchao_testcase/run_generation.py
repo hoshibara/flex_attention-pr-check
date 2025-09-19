@@ -37,6 +37,7 @@ if os.name == "nt":
     sys.stdout.reconfigure(encoding="utf-8")
 
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "./logs")
+PROFILE_COUNT = 0
 
 
 # --- Single parser: all arguments, no subparser ---
@@ -196,6 +197,9 @@ do_profiling = args.profile or do_profiling
 
 # device
 device = torch.device(args.device)
+device_interface = getattr(torch, args.device, None)
+if device_interface is None:
+    raise SystemExit(f"Device {args.device} is not supported.")
 
 
 # adapted from: https://github.com/mit-han-lab/llm-awq/blob/main/awq/entry.py#L255
@@ -404,8 +408,7 @@ model = model.eval().to(device)
 
 def get_memory_usage(name, args):
     if args.print_memory:
-        if args.device == "xpu":
-            memory_allocated = round(torch.xpu.memory_reserved() / 1024**3, 3)
+        memory_allocated = round(device_interface.memory_reserved() / 1024**3, 3)
         logger.debug(f"{name} memory used total: {memory_allocated} GB")
 
 
@@ -430,7 +433,7 @@ if args.inductor:
     if sys.platform.startswith("linux"):
         import torch._inductor.config as inductor_config
 
-        inductor_config.cpp_wrapper = True
+        inductor_config.cpp_wrapper = False
 
     model.forward = torch.compile(model.forward)
 
@@ -557,8 +560,10 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             max_shapes_column_width=300,
         )
         logger.info(output)
+        global PROFILE_COUNT
+        PROFILE_COUNT += 1
         p.export_chrome_trace(
-            os.path.join(RESULTS_DIR, "trace_step" + str(p.step_num) + ".json")
+            os.path.join(RESULTS_DIR, "trace_step" + str(PROFILE_COUNT) + ".json")
         )
 
     profling_context = contextlib.nullcontext()
@@ -577,7 +582,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
                 schedule=torch.profiler.schedule(
                     wait=0,
                     warmup=0,
-                    active=args.num_iter - args.num_warmup,
+                    active=1,
                     skip_first=args.num_warmup,
                 ),
                 on_trace_ready=trace_handler,
@@ -600,8 +605,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         ):
             input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
             output = model.generate(input_ids, generation_config, **generate_kwargs)
-            if args.device == "xpu":
-                torch.xpu.synchronize()
+            device_interface.synchronize()
         # make dynamo clean redundant guards
         torch.compiler.set_stance(skip_guard_eval_unsafe=False)
 
@@ -611,21 +615,16 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         dtype=amp_dtype if amp_enabled else None,
     ):
         with profling_context as prof:
-            for i in range(num_iter):
+            for i in range(num_warmup + 1):
                 # Clean the cache to avoid potential OOM
-                (
-                    torch.xpu.empty_cache()
-                    if args.device == "xpu"
-                    else torch.cuda.empty_cache()
-                )
+                device_interface.empty_cache()
                 gc.collect()
                 tic = time.time()
                 input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
                 output = model.generate(input_ids, generation_config, **generate_kwargs)
                 gen_ids = output[0] if args.token_latency else output
                 gen_text = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
-                if args.device == "xpu":
-                    torch.xpu.synchronize()
+                device_interface.synchronize()
                 toc = time.time()
                 input_tokens_lengths = [x.shape[0] for x in input_ids]
                 output_tokens_lengths = [x.shape[0] for x in gen_ids]
@@ -637,20 +636,48 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
                     f" Generated text:\n{gen_text},\n Total New Tokens: {total_new_tokens}"
                 )
                 logger.info(f"Iteration: {i}, Time: {toc - tic:.6f} sec")
-                if i >= num_warmup:
-                    total_time += toc - tic
-                    if args.token_latency:
-                        total_list.append(output[1])
-                if ref_prompt is not None and ref_prompt in gen_text:
-                    acc_pass += 1
-                elif ref_prompt_cuda is not None and ref_prompt_cuda in gen_text:
-                    acc_pass += 1
 
                 if do_profiling and not args.unitrace:
                     prof.step()
+    
+    logger.info("Warmup & profiling completed, start to run ...")
+
+    with torch.inference_mode(), torch.no_grad(), torch.autocast(
+        device_type=args.device,
+        enabled=amp_enabled,
+        dtype=amp_dtype if amp_enabled else None,
+    ):
+        for i in range(num_iter):
+            # Clean the cache to avoid potential OOM
+            device_interface.empty_cache()
+            gc.collect()
+            tic = time.time()
+            input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
+            output = model.generate(input_ids, generation_config, **generate_kwargs)
+            gen_ids = output[0] if args.token_latency else output
+            gen_text = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
+            device_interface.synchronize()
+            toc = time.time()
+            input_tokens_lengths = [x.shape[0] for x in input_ids]
+            output_tokens_lengths = [x.shape[0] for x in gen_ids]
+            total_new_tokens = [
+                o - i if model.config.model_type != "t5" else o
+                for i, o in zip(input_tokens_lengths, output_tokens_lengths)
+            ]
+            logger.info(
+                f" Generated text:\n{gen_text},\n Total New Tokens: {total_new_tokens}"
+            )
+            logger.info(f"Iteration: {i}, Time: {toc - tic:.6f} sec")
+            total_time += toc - tic
+            if args.token_latency:
+                total_list.append(output[1])
+            if ref_prompt is not None and ref_prompt in gen_text:
+                acc_pass += 1
+            elif ref_prompt_cuda is not None and ref_prompt_cuda in gen_text:
+                acc_pass += 1
 
     logger.info("\n" + "-" * 10 + f" {args.model_id} Summary: " + "-" * 10)
-    latency = total_time / (num_iter - num_warmup)
+    latency = total_time / num_iter 
     logger.info(f"Inference Total Latency: {latency:.5f} sec.")
 
     first_latency = 0
