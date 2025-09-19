@@ -24,7 +24,7 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Define the full path to the results directory
 if [ -z "${RESULTS_DIR:-}" ]; then
-  RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-quantization"
+  RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-quantization-cpp"
   export RESULTS_DIR
 fi
 echo -e "\n\nGET RESULTS_DIR: $RESULTS_DIR\n"

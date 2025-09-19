@@ -433,7 +433,7 @@ if args.inductor:
     if sys.platform.startswith("linux"):
         import torch._inductor.config as inductor_config
 
-        inductor_config.cpp_wrapper = False
+        inductor_config.cpp_wrapper = True
 
     model.forward = torch.compile(model.forward)
 
