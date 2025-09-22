@@ -171,10 +171,15 @@ parser.add_argument(
     help="Enable HQQ quantization for AWQ (default: False)",
 )
 parser.add_argument(
-    "--attn_type",
-    default="flex_attention",
+    "--attn-type",
+    default="sdpa",
     choices=["flex_attention", "paged_attention", "sdpa"],
     type=str,
+)
+parser.add_argument(
+    "--cpp-wrapper",
+    action="store_false",
+    help="Disable C++ wrapper for inductor (default: True)",
 )
 
 args = parser.parse_args()
@@ -433,7 +438,7 @@ if args.inductor:
     if sys.platform.startswith("linux"):
         import torch._inductor.config as inductor_config
 
-        inductor_config.cpp_wrapper = True
+        inductor_config.cpp_wrapper = args.cpp_wrapper
 
     model.forward = torch.compile(model.forward)
 
@@ -590,7 +595,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
 
     # start
     total_time = 0.0
-    num_iter = args.num_iter
+    num_iter = args.num_iter - args.num_warmup
     num_warmup = args.num_warmup
     prompt = [prompt] * args.batch_size
     total_list = []
