@@ -30,7 +30,7 @@ export OCL_ICD_VENDORS=$OPENCL_VENDOR_PATH
 
 
 # Define the full path to the results directory
-RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-quantization-newagama-cpp"
+RESULTS_DIR="$SCRIPT_DIR/logs/$TIMESTAMP-quantization-newagama"
 export RESULTS_DIR
 
 bash run.sh
