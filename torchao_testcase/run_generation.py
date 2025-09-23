@@ -78,8 +78,15 @@ parser.add_argument(
     "--prompt", default=None, type=str, help="input prompt for self-defined if needed"
 )
 parser.add_argument("--batch-size", default=1, type=int, help="batch size")
-parser.add_argument("--num-iter", default=10, type=int, help="num iter")
-parser.add_argument("--num-warmup", default=3, type=int, help="num warmup")
+parser.add_argument(
+    "--num-iter", default=10, type=int, help="num of steps for iteration"
+)
+parser.add_argument(
+    "--num-warmup", default=3, type=int, help="num of steps for warming up"
+)
+parser.add_argument(
+    "--num-profile", default=1, type=int, help="num of steps for profiling"
+)
 parser.add_argument("--num-beams", default=1, type=int, help="beam width")
 parser.add_argument("--greedy", action="store_true")
 parser.add_argument(
@@ -177,9 +184,9 @@ parser.add_argument(
     type=str,
 )
 parser.add_argument(
-    "--cpp-wrapper",
-    action="store_false",
-    help="Disable C++ wrapper for inductor (default: True)",
+    "--disable-cpp-wrapper",
+    action="store_true",
+    help="Disable C++ wrapper for inductor (default: False)",
 )
 
 args = parser.parse_args()
@@ -438,7 +445,7 @@ if args.inductor:
     if sys.platform.startswith("linux"):
         import torch._inductor.config as inductor_config
 
-        inductor_config.cpp_wrapper = args.cpp_wrapper
+        inductor_config.cpp_wrapper = not args.disable_cpp_wrapper
 
     model.forward = torch.compile(model.forward)
 
@@ -587,8 +594,9 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
                 schedule=torch.profiler.schedule(
                     wait=0,
                     warmup=0,
-                    active=1,
+                    active=args.num_profile,
                     skip_first=args.num_warmup,
+                    repeat=1,
                 ),
                 on_trace_ready=trace_handler,
             )
@@ -597,6 +605,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
     total_time = 0.0
     num_iter = args.num_iter - args.num_warmup
     num_warmup = args.num_warmup
+    num_profile = args.num_profile
     prompt = [prompt] * args.batch_size
     total_list = []
 
@@ -612,7 +621,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             output = model.generate(input_ids, generation_config, **generate_kwargs)
             device_interface.synchronize()
         # make dynamo clean redundant guards
-        torch.compiler.set_stance(skip_guard_eval_unsafe=False)
+        torch.compiler.set_stance(skip_guard_eval_unsafe=True)
 
     with torch.inference_mode(), torch.no_grad(), torch.autocast(
         device_type=args.device,
@@ -620,7 +629,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         dtype=amp_dtype if amp_enabled else None,
     ):
         with profling_context as prof:
-            for i in range(num_warmup + 1):
+            for i in range(num_warmup + num_profile + num_iter):
                 # Clean the cache to avoid potential OOM
                 device_interface.empty_cache()
                 gc.collect()
@@ -641,48 +650,19 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
                     f" Generated text:\n{gen_text},\n Total New Tokens: {total_new_tokens}"
                 )
                 logger.info(f"Iteration: {i}, Time: {toc - tic:.6f} sec")
-
+                if i >= num_warmup + num_profile:
+                    total_time += toc - tic
+                    if args.token_latency:
+                        total_list.append(output[1])
+                    if ref_prompt is not None and ref_prompt in gen_text:
+                        acc_pass += 1
+                    elif ref_prompt_cuda is not None and ref_prompt_cuda in gen_text:
+                        acc_pass += 1
                 if do_profiling and not args.unitrace:
                     prof.step()
-    
-    logger.info("Warmup & profiling completed, start to run ...")
-
-    with torch.inference_mode(), torch.no_grad(), torch.autocast(
-        device_type=args.device,
-        enabled=amp_enabled,
-        dtype=amp_dtype if amp_enabled else None,
-    ):
-        for i in range(num_iter):
-            # Clean the cache to avoid potential OOM
-            device_interface.empty_cache()
-            gc.collect()
-            tic = time.time()
-            input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-            output = model.generate(input_ids, generation_config, **generate_kwargs)
-            gen_ids = output[0] if args.token_latency else output
-            gen_text = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
-            device_interface.synchronize()
-            toc = time.time()
-            input_tokens_lengths = [x.shape[0] for x in input_ids]
-            output_tokens_lengths = [x.shape[0] for x in gen_ids]
-            total_new_tokens = [
-                o - i if model.config.model_type != "t5" else o
-                for i, o in zip(input_tokens_lengths, output_tokens_lengths)
-            ]
-            logger.info(
-                f" Generated text:\n{gen_text},\n Total New Tokens: {total_new_tokens}"
-            )
-            logger.info(f"Iteration: {i}, Time: {toc - tic:.6f} sec")
-            total_time += toc - tic
-            if args.token_latency:
-                total_list.append(output[1])
-            if ref_prompt is not None and ref_prompt in gen_text:
-                acc_pass += 1
-            elif ref_prompt_cuda is not None and ref_prompt_cuda in gen_text:
-                acc_pass += 1
 
     logger.info("\n" + "-" * 10 + f" {args.model_id} Summary: " + "-" * 10)
-    latency = total_time / num_iter 
+    latency = total_time / num_iter
     logger.info(f"Inference Total Latency: {latency:.5f} sec.")
 
     first_latency = 0
@@ -762,11 +742,11 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
     if args.device == "xpu":
         if ref_prompt is None:
             logger.debug("Accuracy check skip")
-        elif acc_pass == args.num_iter:
+        elif acc_pass == num_iter:
             logger.debug("Accuracy check pass")
         else:
             logger.debug(
-                f"Accuracy check fail, the wrong iteration number is: {args.num_iter - acc_pass}"
+                f"Accuracy check fail, the wrong iteration number is: {num_iter - acc_pass}"
             )
 
 
