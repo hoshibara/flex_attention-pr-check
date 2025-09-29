@@ -1,24 +1,25 @@
+
 diff --git a/src/transformers/generation/utils.py b/src/transformers/generation/utils.py
-index 95d211cd5e..2b2343c3aa 100644
+index e376565c2a..ceab823652 100644
 --- a/src/transformers/generation/utils.py
 +++ b/src/transformers/generation/utils.py
-@@ -26,6 +26,7 @@ import torch.distributed as dist
+@@ -25,6 +25,7 @@ import torch.distributed as dist
+ from huggingface_hub import file_exists
  from packaging import version
  from torch import nn
- from torch.nn import functional as F
 +import time
  
- from transformers.generation.candidate_generator import AssistantVocabTranslatorCache
- 
-@@ -2216,6 +2217,7 @@ class GenerationMixin:
+ from ..cache_utils import (
+     Cache,
+@@ -2273,6 +2274,7 @@ class GenerationMixin(ContinuousMixin):
+             return custom_generate_function(model=self, **generate_arguments)
  
          # 1. Handle `generation_config` and kwargs that might update it, and validate the `.generate()` call
-         self._validate_model_class()
 +        self.token_latency = kwargs.pop("token_latency", None)
          tokenizer = kwargs.pop("tokenizer", None)  # Pull this out first, we only use it for stopping criteria
          assistant_tokenizer = kwargs.pop("assistant_tokenizer", None)  # only used for assisted generation
  
-@@ -3372,6 +3374,7 @@ class GenerationMixin:
+@@ -2805,6 +2807,7 @@ class GenerationMixin(ContinuousMixin):
              `model.config.is_encoder_decoder=True`.
          """
          # init values
@@ -26,7 +27,7 @@ index 95d211cd5e..2b2343c3aa 100644
          pad_token_id = generation_config._pad_token_tensor
          output_attentions = generation_config.output_attentions
          output_hidden_states = generation_config.output_hidden_states
-@@ -3420,6 +3423,7 @@ class GenerationMixin:
+@@ -2856,6 +2859,7 @@ class GenerationMixin(ContinuousMixin):
              is_prefill = True
  
          while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
@@ -34,7 +35,7 @@ index 95d211cd5e..2b2343c3aa 100644
              # prepare model inputs
              model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
  
-@@ -3493,13 +3497,16 @@ class GenerationMixin:
+@@ -2929,13 +2933,16 @@ class GenerationMixin(ContinuousMixin):
              # This is needed to properly delete outputs.logits which may be very large for first iteration
              # Otherwise a reference to outputs is kept which keeps the logits alive in the next iteration
              del outputs
@@ -52,7 +53,7 @@ index 95d211cd5e..2b2343c3aa 100644
                      sequences=input_ids,
                      scores=scores,
                      logits=raw_logits,
-@@ -3511,7 +3518,7 @@ class GenerationMixin:
+@@ -2947,7 +2954,7 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
              else:
@@ -61,7 +62,7 @@ index 95d211cd5e..2b2343c3aa 100644
                      sequences=input_ids,
                      scores=scores,
                      logits=raw_logits,
-@@ -3520,7 +3527,12 @@ class GenerationMixin:
+@@ -2956,7 +2963,12 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
          else:
@@ -73,9 +74,9 @@ index 95d211cd5e..2b2343c3aa 100644
 +        else:
 +            return output_result
  
-     # Auxiliary functions for beam search
-     def _temporary_reorder_cache(self, past_key_values, beam_idx):
-@@ -3794,6 +3806,7 @@ class GenerationMixin:
+     @staticmethod
+     def _flatten_beam_dim(tensor: torch.Tensor) -> torch.Tensor:
+@@ -3237,6 +3249,7 @@ class GenerationMixin(ContinuousMixin):
          """
  
          # 1. init beam_search values
@@ -83,7 +84,7 @@ index 95d211cd5e..2b2343c3aa 100644
          pad_token_id = generation_config._pad_token_tensor
          eos_token_id = generation_config._eos_token_tensor
          output_attentions = generation_config.output_attentions
-@@ -3893,6 +3906,7 @@ class GenerationMixin:
+@@ -3339,6 +3352,7 @@ class GenerationMixin(ContinuousMixin):
  
          # 4. run the generation loop
          while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
@@ -91,17 +92,20 @@ index 95d211cd5e..2b2343c3aa 100644
              # a. Forward current tokens, obtain the logits
              flat_running_sequences = self._flatten_beam_dim(running_sequences[:, :, :cur_len])
              model_inputs = self.prepare_inputs_for_generation(flat_running_sequences, **model_kwargs)
-@@ -3946,6 +3960,9 @@ class GenerationMixin:
+@@ -3392,6 +3406,12 @@ class GenerationMixin(ContinuousMixin):
              # This is needed to properly delete logits which may be very large for first iteration
              # Otherwise a reference to outputs is kept which keeps the logits alive in the next iteration
              del model_outputs
 +            if self.token_latency:
-+                torch.xpu.synchronize()
++                if torch.xpu.is_available():
++                    torch.xpu.synchronize()
++                else:
++                    torch.cuda.synchronize()
 +            latency_list.append(time.time() - tic)
  
              log_probs = self._unflatten_beam_dim(log_probs, batch_size, num_beams)
              log_probs = log_probs + running_beam_scores[:, :, None]
-@@ -4045,7 +4062,7 @@ class GenerationMixin:
+@@ -3500,7 +3520,7 @@ class GenerationMixin(ContinuousMixin):
                  beam_scores = None
  
              if self.config.is_encoder_decoder:
@@ -110,7 +114,7 @@ index 95d211cd5e..2b2343c3aa 100644
                      sequences=sequences,
                      sequences_scores=beam_scores,
                      scores=all_scores,
-@@ -4059,7 +4076,7 @@ class GenerationMixin:
+@@ -3514,7 +3534,7 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
              else:
@@ -119,7 +123,7 @@ index 95d211cd5e..2b2343c3aa 100644
                      sequences=sequences,
                      sequences_scores=beam_scores,
                      scores=all_scores,
-@@ -4070,7 +4087,12 @@ class GenerationMixin:
+@@ -3525,7 +3545,12 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
          else:
@@ -133,79 +137,3 @@ index 95d211cd5e..2b2343c3aa 100644
  
      def _group_beam_search(
          self,
-diff --git a/src/transformers/integrations/sdpa_attention.py b/src/transformers/integrations/sdpa_attention.py
-index 9c924c048a..1e0c7e4de3 100644
---- a/src/transformers/integrations/sdpa_attention.py
-+++ b/src/transformers/integrations/sdpa_attention.py
-@@ -26,10 +26,6 @@ def sdpa_attention_forward(
-     is_causal: Optional[bool] = None,
-     **kwargs,
- ) -> Tuple[torch.Tensor, None]:
--    if hasattr(module, "num_key_value_groups"):
--        key = repeat_kv(key, module.num_key_value_groups)
--        value = repeat_kv(value, module.num_key_value_groups)
--
-     causal_mask = attention_mask
-     if attention_mask is not None and causal_mask.ndim == 4:
-         causal_mask = causal_mask[:, :, :, : key.shape[-2]]
-@@ -59,6 +55,7 @@ def sdpa_attention_forward(
-         dropout_p=dropout,
-         scale=scaling,
-         is_causal=is_causal,
-+        enable_gqa=True
-     )
-     attn_output = attn_output.transpose(1, 2).contiguous()
- 
-diff --git a/src/transformers/modeling_utils.py b/src/transformers/modeling_utils.py
-index f51a0c1f8d..e1acbaa7d7 100644
---- a/src/transformers/modeling_utils.py
-+++ b/src/transformers/modeling_utils.py
-@@ -5799,6 +5799,16 @@ def caching_allocator_warmup(model: PreTrainedModel, expanded_device_map: Dict,
-             device_memory = torch.cuda.mem_get_info(index)[0]
-             # Allow up to 95% of max device memory
-             byte_count = min(byte_count, int(0.95 * device_memory))
-+        if device.type == "xpu":
-+            # Known error from https://github.com/pytorch/pytorch/issues/157989
-+            # BMG will fail on torch.xpu.mem_get_info() on 2025.1. Needs to upgrade to 2025.2 to fix this.
-+            if os.environ.get("UR_L0_ENABLE_SYSMAN_ENV_DEFAULT") is not None and os.environ["UR_L0_ENABLE_SYSMAN_ENV_DEFAULT"] == "0":
-+                index = device.index if device.index is not None else torch.xpu.current_device()
-+                device_memory = torch.xpu.mem_get_info(index)[0]
-+            else:
-+                # 11.5GB
-+                device_memory = 11.5 * 1024**3
-+            byte_count = min(byte_count, int(0.95 * device_memory))
-         # Allocate memory
-         _ = torch.empty(byte_count // factor, dtype=torch.float16, device=device, requires_grad=False)
- 
-diff --git a/src/transformers/utils/quantization_config.py b/src/transformers/utils/quantization_config.py
-index b0f119c58b..85cc411e6b 100644
---- a/src/transformers/utils/quantization_config.py
-+++ b/src/transformers/utils/quantization_config.py
-@@ -1627,10 +1627,25 @@ class TorchAoConfig(QuantizationConfigMixin):
-                 and is_torchao_available()
-                 and self.quant_type == "int4_weight_only"
-                 and version.parse(importlib.metadata.version("torchao")) >= version.parse("0.8.0")
-+                and quant_type_kwargs.get("layout", None) is None
-             ):
--                from torchao.dtypes import Int4CPULayout
-+                if torch.xpu.is_available():
-+                    if version.parse(importlib.metadata.version("torchao")) >= version.parse(
-+                        "0.11.0"
-+                    ) and version.parse(importlib.metadata.version("torch")) > version.parse("2.7.9"):
-+                        from torchao.dtypes import Int4XPULayout
-+                        from torchao.quantization.quant_primitives import ZeroPointDomain
-+
-+                        quant_type_kwargs["layout"] = Int4XPULayout()
-+                        quant_type_kwargs["zero_point_domain"] = ZeroPointDomain.INT
-+                    else:
-+                        raise ValueError(
-+                            "TorchAoConfig requires torchao >= 0.11.0 and torch >= 2.8.0 for XPU support. Please upgrade the version or use run on CPU with the cpu version pytorch."
-+                        )
-+                else:
-+                    from torchao.dtypes import Int4CPULayout
- 
--                quant_type_kwargs["layout"] = Int4CPULayout()
-+                    quant_type_kwargs["layout"] = Int4CPULayout()
- 
-             return methods[self.quant_type](**quant_type_kwargs)
-         else:

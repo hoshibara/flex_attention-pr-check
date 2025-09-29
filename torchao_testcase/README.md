@@ -20,3 +20,13 @@ git submodule update --init --recursive
 python setup.py develop
 cd ..
 ```
+
+```bash
+git clone https://github.com/huggingface/transformers.git
+cd transformers
+git checkout v4.56.2
+git apply --ignore-space-change --ignore-whitespace ../patches/transformers.patch 
+python setup.py install
+cd ..
+pip install -r requirements.txt
+```

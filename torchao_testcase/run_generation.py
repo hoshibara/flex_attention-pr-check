@@ -279,21 +279,22 @@ device_map = None
 if args.quant_mode == "woq" and args.woq_type == "rtn":
     from torchao.dtypes import Int4XPULayout
     from torchao.quantization.quant_primitives import ZeroPointDomain
+    from torchao.quantization import Int4WeightOnlyConfig, quantize_
     from transformers import TorchAoConfig
 
-    quant_kwargs = {
-        "quant_type": "int4_weight_only",
-        "group_size": args.group_size,
-    }
-    # For CUDA, TensorCoreTiledLayout() is the default layout, and it does not require the zero_point settings
     if args.device == "xpu":
-        quant_kwargs["layout"] = Int4XPULayout()
         zero_point_domain = (
             ZeroPointDomain.FLOAT if args.ZPFLOAT else ZeroPointDomain.INT
         )
-        quant_kwargs["zero_point_domain"] = zero_point_domain
+        quant_config = Int4WeightOnlyConfig(
+            group_size=args.group_size, int4_packing_format="plain_int32"
+        )
+    elif args.device == "cuda":
+        quant_config = Int4WeightOnlyConfig(
+            group_size=args.group_size, int4_packing_format="tile_packed_to_4d"
+        )
 
-    quantization_config = TorchAoConfig(**quant_kwargs)
+    quantization_config = TorchAoConfig(quant_config)
 
     logger.info(
         f"Using {args.device} device for int4_weight_only RTN mode, Using TorchAoConfig: {quantization_config}"
@@ -634,7 +635,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             output = model.generate(input_ids, generation_config, **generate_kwargs)
             device_interface.synchronize()
         # make dynamo clean redundant guards
-        torch.compiler.set_stance(skip_guard_eval_unsafe=True)
+        torch.compiler.set_stance(skip_guard_eval_unsafe=False)
 
     with torch.inference_mode(), torch.no_grad(), torch.autocast(
         device_type=args.device,
