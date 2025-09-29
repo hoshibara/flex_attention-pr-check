@@ -128,7 +128,7 @@ parser.add_argument(
     "--quant-mode",
     type=str,
     default=None,
-    choices=["woq"],
+    choices=["woq", "dynamic_quant"],
     help="Quantization Mode. (default: None)",
 )
 parser.add_argument(
@@ -169,8 +169,8 @@ parser.add_argument(
     "--quant-dtype",
     type=str,
     default="uint4",
-    choices=["unit1", "uint4", "uint8"],
-    help="The data type of the quantized weights for AWQ. Currently only torch.uint4 is intended to be used but can be used with torch.uint1 -> torch.uint8",
+    choices=["unit1", "int4", "uint4", "uint8", "int8"],
+    help="The data type of the quantized weights.",
 )
 parser.add_argument(
     "--use-hqq",
@@ -321,9 +321,8 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
         _linear_extra_repr,
         _is_linear,
     )
-    from torchao.quantization import quantize_
-    from torchao.dtypes import Int4XPULayout
-    from torchao.prototype.awq import AWQObservedLinear, awq_uintx, insert_awq_observer_
+    from torchao.quantization import Int4WeightOnlyConfig, quantize_
+    from torchao.prototype.awq import AWQConfig
 
     if args.load_quantize_model:
         import types
@@ -352,8 +351,6 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
             extra_args: Dict = {},
         ):
             if filter_fn(model, cur_fqn[:-1]):
-                if device is not None:
-                    model = model.to(device=device)
                 model = replacement_fn(model, extra_args, name=cur_fqn[:-1])
                 return model
             for name, child in list(model.named_children()):
@@ -367,8 +364,6 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
                 )
                 if new_child is not child and new_child is not None:
                     setattr(model, name, new_child)
-            if device is not None:
-                model = model.to(device=device)
             return model
 
         def load_awq(model, state_dict, filter_fn=None):
@@ -383,6 +378,7 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
         logger.info(f"load awq model from {args.model_save_path}")
         data = torch.load(args.model_save_path)
         model = load_awq(model, data)
+        del data
         model = model.to(device)
     else:
         if args.ZPFLOAT:
@@ -392,8 +388,24 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
         quant_dtype = getattr(torch, args.quant_dtype)
         group_size = args.group_size
         logger.info(f"running {quant_dtype} calibration")
-        insert_awq_observer_(
-            model, 1, 512, quant_dtype=quant_dtype, group_size=group_size
+        if "cuda" in device.type:
+            base_config = Int4WeightOnlyConfig(group_size=group_size)
+        elif "xpu" in device.type:
+            base_config = Int4WeightOnlyConfig(
+                group_size=group_size, int4_packing_format="plain_int32"
+            )
+        elif "cpu" in device.type:
+            base_config = Int4WeightOnlyConfig(
+                group_size=group_size, int4_packing_format="opaque"
+            )
+        else:
+            assert False, "Unsupported device: {}".format(device)
+        base_config.use_hqq = args.use_hqq
+        quant_config = AWQConfig(base_config, step="prepare")
+
+        quantize_(
+            model,
+            quant_config,
         )
         calibration_data = get_calib_dataset(
             tokenizer=tokenizer, n_samples=args.calibration_samples, block_size=512
@@ -402,18 +414,19 @@ if args.quant_mode == "woq" and args.woq_type == "awq":
             if batch.numel() == 0:
                 continue
             model(batch.to(device))
-            batch.to("cpu")
-        is_observed_linear = lambda m, fqn: isinstance(m, AWQObservedLinear)
-        use_hqq = args.use_hqq
-        awq_uintx_config = awq_uintx(
-            quant_dtype=quant_dtype, group_size=group_size, use_hqq=use_hqq
-        )
-        if "xpu" in device.type:
-            awq_uintx_config.layout = Int4XPULayout()
-        quantize_(model, awq_uintx_config, is_observed_linear)
+        quant_config = AWQConfig(base_config, step="convert")
+        quantize_(model, quant_config)
         if args.model_save_path:
             logger.info(f"Saving model to {args.model_save_path}")
             torch.save(model.state_dict(), args.model_save_path)
+
+elif args.quant_mode == "dynamic_quant":
+    from torchao.quantization import quantize_, Int8DynamicActivationInt8WeightConfig
+
+    config_map = {
+        "int8": Int8DynamicActivationInt8WeightConfig(),
+    }
+    quantize_(model, config_map[args.quant_dtype])
 
 model = model.eval().to(device)
 
