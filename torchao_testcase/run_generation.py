@@ -692,6 +692,8 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
         average_2n_latency = np.mean(average_2n)
         logger.info(f"First token latency: {first_latency:.5f} sec.")
         logger.info(f"Next token latency: {average_2n_latency:.5f} sec.")
+        logger.info(f"First token latency list: {list(sorted([x[0] for x in total_list]))}")
+        logger.info(f"Next token latency list: {average_2n}")
 
     output_data = {
         "model_name": args.model_id,
