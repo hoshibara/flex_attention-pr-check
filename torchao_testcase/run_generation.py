@@ -484,7 +484,10 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             )
             device_interface.synchronize()
         # make dynamo clean redundant guards
-        torch.compiler.set_stance(skip_guard_eval_unsafe=False)
+        if args.attn_type == "flex_attention":
+            torch.compiler.set_stance(skip_guard_eval_unsafe=False)
+        else:
+            torch.compiler.set_stance(skip_guard_eval_unsafe=True)
 
     with torch.inference_mode(), torch.no_grad(), torch.autocast(
         device_type=args.device,
