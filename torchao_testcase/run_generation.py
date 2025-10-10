@@ -96,6 +96,11 @@ parser.add_argument(
     action="store_true",
     help="Disable C++ wrapper for inductor (default: False)",
 )
+parser.add_argument(
+    "--disable-skip-guard-eval",
+    action="store_true",
+    help="Disable skip guard evaluation (default: False)",
+)
 
 args = parser.parse_args()
 
@@ -484,10 +489,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             )
             device_interface.synchronize()
         # make dynamo clean redundant guards
-        if args.attn_type == "flex_attention":
-            torch.compiler.set_stance(skip_guard_eval_unsafe=False)
-        else:
-            torch.compiler.set_stance(skip_guard_eval_unsafe=True)
+        torch.compiler.set_stance(skip_guard_eval_unsafe=not args.disable_skip_guard_eval)
 
     with torch.inference_mode(), torch.no_grad(), torch.autocast(
         device_type=args.device,

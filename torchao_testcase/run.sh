@@ -68,14 +68,23 @@ export SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=2
 python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
     --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
-    --group-size 128 --quant-dtype uint4 --profile --attn-type flex_attention --disable-cpp-wrapper \
-    >>"$RESULTS_DIR/llama31.uint4.fa.nocpp.$DEVICE.profile.log" 2>&1
+    --group-size 128 --quant-dtype uint4 --profile \
+    --attn-type flex_attention --disable-cpp-wrapper --disable-skip-guard-eval \
+    >>"$RESULTS_DIR/llama31.uint4.fa.nocpp.noskip.$DEVICE.profile.log" 2>&1
 
 python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
     --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
-    --group-size 128 --quant-dtype uint4 --profile --attn-type sdpa \
-    >>"$RESULTS_DIR/llama31.uint4.sdpa.cpp.$DEVICE.profile.log" 2>&1
+    --group-size 128 --quant-dtype uint4 --profile \
+    --attn-type sdpa --disable-skip-guard-eval \
+    >>"$RESULTS_DIR/llama31.uint4.sdpa.cpp.noskip.$DEVICE.profile.log" 2>&1
+
+python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
+    --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+    --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --group-size 128 --quant-dtype uint4 --profile \
+    --attn-type sdpa \
+    >>"$RESULTS_DIR/llama31.uint4.sdpa.cpp.skip.$DEVICE.profile.log" 2>&1
 
 set -e
 echo "Finished running llama3 models!"
