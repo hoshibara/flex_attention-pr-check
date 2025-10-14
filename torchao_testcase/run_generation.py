@@ -13,6 +13,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger()  # Use root logger for reliability
 
+import copy
 import contextlib
 import torch
 import time
@@ -488,7 +489,7 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             # Warmup for 2 iterations to avoid dynamo guard failure
             # To save time, set the `max_new_tokens = 8` (because min_new_tokens=8)
             # during the warmup for set_stance() stage.
-            warmup_generation_config=generation_config
+            warmup_generation_config = copy.deepcopy(generation_config)
             warmup_generation_config.max_new_tokens = 8
             # Set min_new_tokens to 8 to make consistent output
             warmup_generation_config.min_new_tokens = 8
