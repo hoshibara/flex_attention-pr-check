@@ -61,33 +61,78 @@ else
     set -e
 fi
 
-echo "Running llama3 models..."
 set +e
-
 export SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=2
-python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
+
+echo "Running llama3 models..."
+# python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
+#     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+#     --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+#     --group-size 128 --quant-dtype uint4 --profile \
+#     --attn-type flex_attention --disable-cpp-wrapper --disable-skip-guard-eval \
+#     >>"$RESULTS_DIR/llama31.uint4.fa.nocpp.noskip.$DEVICE.profile.log" 2>&1
+
+# python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
+#     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+#     --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+#     --group-size 128 --quant-dtype uint4 --profile \
+#     --attn-type sdpa --disable-skip-guard-eval \
+#     >>"$RESULTS_DIR/llama31.uint4.sdpa.cpp.noskip.$DEVICE.profile.log" 2>&1
+
+# python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
+#     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+#     --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+#     --group-size 128 --quant-dtype uint4 --profile \
+#     --attn-type sdpa \
+#     >>"$RESULTS_DIR/llama31.uint4.sdpa.cpp.skip.$DEVICE.profile.log" 2>&1
+echo "Finished running llama3 models!"
+
+echo "Running qwen2.5 models..."
+python -u run_generation.py -m Qwen/Qwen2.5-1.5B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
-    --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --sub-model-name qwen2.5-7b --use-static-cache --use-hf-code False --woq --woq-type rtn \
     --group-size 128 --quant-dtype uint4 --profile \
     --attn-type flex_attention --disable-cpp-wrapper --disable-skip-guard-eval \
-    >>"$RESULTS_DIR/llama31.uint4.fa.nocpp.noskip.$DEVICE.profile.log" 2>&1
+    >>"$RESULTS_DIR/qwen25-1b.uint4.fa.nocpp.noskip.$DEVICE.profile.log" 2>&1
 
-python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
+python -u run_generation.py -m Qwen/Qwen2.5-1.5B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
-    --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --sub-model-name qwen2.5-7b --use-static-cache --use-hf-code False --woq --woq-type rtn \
     --group-size 128 --quant-dtype uint4 --profile \
     --attn-type sdpa --disable-skip-guard-eval \
-    >>"$RESULTS_DIR/llama31.uint4.sdpa.cpp.noskip.$DEVICE.profile.log" 2>&1
+    >>"$RESULTS_DIR/qwen25-1b.uint4.sdpa.cpp.noskip.$DEVICE.profile.log" 2>&1
 
-python -u run_generation.py -m meta-llama/Llama-3.1-8B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
+python -u run_generation.py -m Qwen/Qwen2.5-1.5B-Instruct --input-tokens 1024 --max-new-tokens 1024 \
     --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
-    --sub-model-name llama3.1-8b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --sub-model-name qwen2.5-7b --use-static-cache --use-hf-code False --woq --woq-type rtn \
     --group-size 128 --quant-dtype uint4 --profile \
     --attn-type sdpa \
-    >>"$RESULTS_DIR/llama31.uint4.sdpa.cpp.skip.$DEVICE.profile.log" 2>&1
+    >>"$RESULTS_DIR/qwen25-1b.uint4.sdpa.cpp.skip.$DEVICE.profile.log" 2>&1
+echo "Finished running qwen2.5 models!"
 
+echo "Running qwen3 4B models..."
+python -u run_generation.py -m Qwen/Qwen3-4B-Instruct-2507 --input-tokens 1024 --max-new-tokens 1024 \
+    --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+    --sub-model-name qwen2.5-7b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --group-size 128 --quant-dtype uint4 --profile \
+    --attn-type flex_attention --disable-cpp-wrapper --disable-skip-guard-eval \
+    >>"$RESULTS_DIR/qwen3-4b.uint4.fa.nocpp.noskip.$DEVICE.profile.log" 2>&1
+
+python -u run_generation.py -m Qwen/Qwen3-4B-Instruct-2507 --input-tokens 1024 --max-new-tokens 1024 \
+    --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+    --sub-model-name qwen2.5-7b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --group-size 128 --quant-dtype uint4 --profile \
+    --attn-type sdpa --disable-skip-guard-eval \
+    >>"$RESULTS_DIR/qwen3-4b.uint4.sdpa.cpp.noskip.$DEVICE.profile.log" 2>&1
+
+python -u run_generation.py -m Qwen/Qwen3-4B-Instruct-2507 --input-tokens 1024 --max-new-tokens 1024 \
+    --num-iter 10 --num-warmup 4 --batch-size 1 --device $DEVICE --token-latency --num-beams 1 --inductor \
+    --sub-model-name qwen2.5-7b --use-static-cache --use-hf-code False --woq --woq-type rtn \
+    --group-size 128 --quant-dtype uint4 --profile \
+    --attn-type sdpa \
+    >>"$RESULTS_DIR/qwen3-4b.uint4.sdpa.cpp.skip.$DEVICE.profile.log" 2>&1
+echo "Finished running qwen3 4B models!"
 set -e
-echo "Finished running llama3 models!"
 
 # --- Script End ---
 
