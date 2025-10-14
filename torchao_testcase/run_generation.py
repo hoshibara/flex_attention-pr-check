@@ -484,10 +484,20 @@ def run_generate(num_tokens, num_input_tokens, num_beams):
             dtype=amp_dtype if amp_enabled else None,
         ):
             input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-            output = model.generate(
-                input_ids, generation_config, **generate_kwargs
-            )
+
+            # Warmup for 2 iterations to avoid dynamo guard failure
+            # To save time, set the `max_new_tokens = 8` (because min_new_tokens=8)
+            # during the warmup for set_stance() stage.
+            warmup_generation_config=generation_config
+            warmup_generation_config.max_new_tokens = 8
+            # Set min_new_tokens to 8 to make consistent output
+            warmup_generation_config.min_new_tokens = 8
+            for _ in range(2):
+                output = model.generate(
+                    input_ids, warmup_generation_config,  **generate_kwargs
+                )
             device_interface.synchronize()
+
         # make dynamo clean redundant guards
         torch.compiler.set_stance(skip_guard_eval_unsafe=not args.disable_skip_guard_eval)
 
