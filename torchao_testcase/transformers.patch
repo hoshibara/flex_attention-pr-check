@@ -1,25 +1,24 @@
-
 diff --git a/src/transformers/generation/utils.py b/src/transformers/generation/utils.py
-index e376565c2a..ceab823652 100644
+index 6c067f2ce2..adddbbaef4 100644
 --- a/src/transformers/generation/utils.py
 +++ b/src/transformers/generation/utils.py
-@@ -25,6 +25,7 @@ import torch.distributed as dist
- from huggingface_hub import file_exists
- from packaging import version
- from torch import nn
+@@ -19,6 +19,7 @@ import os
+ import warnings
+ from dataclasses import dataclass
+ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 +import time
  
- from ..cache_utils import (
-     Cache,
-@@ -2273,6 +2274,7 @@ class GenerationMixin(ContinuousMixin):
-             return custom_generate_function(model=self, **generate_arguments)
- 
+ import numpy as np
+ import torch
+@@ -2360,6 +2361,7 @@ class GenerationMixin(ContinuousMixin):
          # 1. Handle `generation_config` and kwargs that might update it, and validate the `.generate()` call
-+        self.token_latency = kwargs.pop("token_latency", None)
          tokenizer = kwargs.pop("tokenizer", None)  # Pull this out first, we only use it for stopping criteria
          assistant_tokenizer = kwargs.pop("assistant_tokenizer", None)  # only used for assisted generation
++        self.token_latency = kwargs.pop("token_latency", None)
  
-@@ -2805,6 +2807,7 @@ class GenerationMixin(ContinuousMixin):
+         generation_config, model_kwargs = self._prepare_generation_config(
+             generation_config, use_model_defaults, **kwargs
+@@ -3532,6 +3534,7 @@ class GenerationMixin(ContinuousMixin):
              `model.config.is_encoder_decoder=True`.
          """
          # init values
@@ -27,7 +26,7 @@ index e376565c2a..ceab823652 100644
          pad_token_id = generation_config._pad_token_tensor
          output_attentions = generation_config.output_attentions
          output_hidden_states = generation_config.output_hidden_states
-@@ -2856,6 +2859,7 @@ class GenerationMixin(ContinuousMixin):
+@@ -3587,6 +3590,7 @@ class GenerationMixin(ContinuousMixin):
              is_prefill = True
  
          while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
@@ -35,7 +34,7 @@ index e376565c2a..ceab823652 100644
              # prepare model inputs
              model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
  
-@@ -2929,13 +2933,16 @@ class GenerationMixin(ContinuousMixin):
+@@ -3660,13 +3664,16 @@ class GenerationMixin(ContinuousMixin):
              # This is needed to properly delete outputs.logits which may be very large for first iteration
              # Otherwise a reference to outputs is kept which keeps the logits alive in the next iteration
              del outputs
@@ -53,7 +52,7 @@ index e376565c2a..ceab823652 100644
                      sequences=input_ids,
                      scores=scores,
                      logits=raw_logits,
-@@ -2947,7 +2954,7 @@ class GenerationMixin(ContinuousMixin):
+@@ -3678,7 +3685,7 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
              else:
@@ -62,7 +61,7 @@ index e376565c2a..ceab823652 100644
                      sequences=input_ids,
                      scores=scores,
                      logits=raw_logits,
-@@ -2956,7 +2963,12 @@ class GenerationMixin(ContinuousMixin):
+@@ -3687,7 +3694,12 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
          else:
@@ -76,7 +75,7 @@ index e376565c2a..ceab823652 100644
  
      @staticmethod
      def _flatten_beam_dim(tensor: torch.Tensor) -> torch.Tensor:
-@@ -3237,6 +3249,7 @@ class GenerationMixin(ContinuousMixin):
+@@ -3968,6 +3980,7 @@ class GenerationMixin(ContinuousMixin):
          """
  
          # 1. init beam_search values
@@ -84,7 +83,7 @@ index e376565c2a..ceab823652 100644
          pad_token_id = generation_config._pad_token_tensor
          eos_token_id = generation_config._eos_token_tensor
          output_attentions = generation_config.output_attentions
-@@ -3339,6 +3352,7 @@ class GenerationMixin(ContinuousMixin):
+@@ -4070,6 +4083,7 @@ class GenerationMixin(ContinuousMixin):
  
          # 4. run the generation loop
          while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
@@ -92,7 +91,7 @@ index e376565c2a..ceab823652 100644
              # a. Forward current tokens, obtain the logits
              flat_running_sequences = self._flatten_beam_dim(running_sequences[:, :, :cur_len])
              model_inputs = self.prepare_inputs_for_generation(flat_running_sequences, **model_kwargs)
-@@ -3392,6 +3406,12 @@ class GenerationMixin(ContinuousMixin):
+@@ -4123,6 +4137,12 @@ class GenerationMixin(ContinuousMixin):
              # This is needed to properly delete logits which may be very large for first iteration
              # Otherwise a reference to outputs is kept which keeps the logits alive in the next iteration
              del model_outputs
@@ -105,7 +104,7 @@ index e376565c2a..ceab823652 100644
  
              log_probs = self._unflatten_beam_dim(log_probs, batch_size, num_beams)
              log_probs = log_probs + running_beam_scores[:, :, None]
-@@ -3500,7 +3520,7 @@ class GenerationMixin(ContinuousMixin):
+@@ -4231,7 +4251,7 @@ class GenerationMixin(ContinuousMixin):
                  beam_scores = None
  
              if self.config.is_encoder_decoder:
@@ -114,7 +113,7 @@ index e376565c2a..ceab823652 100644
                      sequences=sequences,
                      sequences_scores=beam_scores,
                      scores=all_scores,
-@@ -3514,7 +3534,7 @@ class GenerationMixin(ContinuousMixin):
+@@ -4245,7 +4265,7 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
              else:
@@ -123,7 +122,7 @@ index e376565c2a..ceab823652 100644
                      sequences=sequences,
                      sequences_scores=beam_scores,
                      scores=all_scores,
-@@ -3525,7 +3545,12 @@ class GenerationMixin(ContinuousMixin):
+@@ -4256,7 +4276,12 @@ class GenerationMixin(ContinuousMixin):
                      past_key_values=model_kwargs.get("past_key_values"),
                  )
          else:
@@ -137,3 +136,21 @@ index e376565c2a..ceab823652 100644
  
      def _group_beam_search(
          self,
+diff --git a/src/transformers/integrations/flex_attention.py b/src/transformers/integrations/flex_attention.py
+index 31d3b3b14d..7a6f39f8f0 100644
+--- a/src/transformers/integrations/flex_attention.py
++++ b/src/transformers/integrations/flex_attention.py
+@@ -290,6 +290,13 @@ def flex_attention_forward(
+         enable_gqa = False
+ 
+     kernel_options = kwargs.get("kernel_options")
++
++    if query.device.type == "xpu":
++        # On XPU, TMA is not always beneficial. Disable it by default unless explicitly enabled by user.
++        if kernel_options is None:
++            kernel_options = {}
++        kernel_options["USE_TMA"] = True
++
+     attn_output, attention_weights = compile_friendly_flex_attention(
+         query,
+         key,

@@ -22,9 +22,10 @@ cd ..
 ```
 
 ```bash
+# self build transformers for collecting token latency
 git clone https://github.com/huggingface/transformers.git
 cd transformers
-git checkout v4.56.2
+git checkout v4.55.4
 git apply --ignore-space-change --ignore-whitespace ../patches/transformers.patch 
 python setup.py install
 cd ..
