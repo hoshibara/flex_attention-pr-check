@@ -26,7 +26,7 @@ cd ..
 git clone https://github.com/huggingface/transformers.git
 cd transformers
 git checkout v4.55.4
-git apply --ignore-space-change --ignore-whitespace ../patches/transformers.patch 
+git apply --ignore-space-change --ignore-whitespace ./transformers.patch 
 python setup.py install
 cd ..
 pip install -r requirements.txt
