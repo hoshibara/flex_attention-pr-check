@@ -16,7 +16,7 @@ TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 
-WORKSPACE="/home/xingyuan/projects/20250910-FA/igc-agama/data/waihungt/QuickBuild"
+WORKSPACE="/pytorch/xingyuan/downloads/chengjun-igc-driver/data/waihungt/QuickBuild"
 export TargetDriver="open-linux-driver-ci-rel_igc_2.18.x-8"
 export IGC_INSTALL=${WORKSPACE}/${TargetDriver}
 export PATH=$IGC_INSTALL/usr/bin/:$PATH
